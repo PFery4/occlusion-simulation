@@ -22,13 +22,15 @@ def get_config() -> dict:
     return config
 
 
-def main():
-    print("Hello World!")
+def visualize_trajectories(scene_name: str, video_name: str):
+    pass
 
+
+def main():
     col_names = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
 
     data_path = get_config()["dataset"]["path"]
-    print(data_path)
+    print(f"Extracting data from:\n{data_path}\n")
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
         # print(os.path.realpath(scene_name))
