@@ -33,10 +33,5 @@ def pd_df_from(annotation_filepath):
     return pd.read_csv(annotation_filepath, sep=" ", names=SDD_COL_NAMES)
 
 
-def add_xy_columns_to(annot_df):
-    annot_df["x"] = (annot_df["xmin"] + annot_df["xmax"]) / 2
-    annot_df["y"] = (annot_df["ymin"] + annot_df["ymax"]) / 2
-
-
 if __name__ == '__main__':
     print(get_config())
