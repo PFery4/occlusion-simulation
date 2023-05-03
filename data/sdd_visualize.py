@@ -1,71 +1,55 @@
 import os
-import yaml
-import pandas as pd
+
+import matplotlib.axes
 import matplotlib.pyplot as plt
 import cv2
+import numpy as np
+import pandas as pd
+
+import sdd_extract
 
 
-def get_config() -> dict:
-    """
-    reads the config file 'config.yaml' at the root of the project repository
-    :return: the contents of the config file, as a dict
-    """
-    # read config file
-    confpath = os.path.abspath(os.path.realpath(__file__) + "/../../config.yaml")
-    print(f"Loading config from: {confpath}")
-    with open(confpath, "r") as stream:
-        try:
-            config = yaml.safe_load(stream)
-            # print(config)
-        except yaml.YAMLError as exc:
-            print(exc)
-    return config
+def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.DataFrame):
 
-
-def visualize_trajectories(scene_name: str, video_name: str):
-    pass
+    agents = traj_df["Id"].unique()
+    for agent in agents:
+        x = traj_df[traj_df["Id"] == agent].loc[:, "x"].values
+        y = traj_df[traj_df["Id"] == agent].loc[:, "y"].values
+        draw_ax.plot(x, y, alpha=0.5)
+        # draw_ax.scatter(x, y, s=5, marker='o')
 
 
 def main():
-    col_names = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
-
-    data_path = get_config()["dataset"]["path"]
+    data_path = sdd_extract.get_config()["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
         # print(os.path.realpath(scene_name))
         for video_name in os.scandir(os.path.realpath(scene_name)):
             annot_file_path = os.path.join(data_path, "annotations", scene_name, video_name, "annotations.txt")
-            sample_image_path = os.path.join(data_path, "annotations", scene_name, video_name, "reference.jpg")
-            # print(annot_file_path)
-            # print(os.path.exists(annot_file_path))
-            # print(sample_image_path)
-            # print(os.path.exists(sample_image_path))
+            ref_image_path = os.path.join(data_path, "annotations", scene_name, video_name, "reference.jpg")
 
-            annot_file_df = pd.read_csv(annot_file_path, sep=" ", names=col_names)
+            annot_file_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
 
-            # we only care about pedestrians:
-            is_pedestrian = annot_file_df["label"] == "Pedestrian"
-            # we highlight manually annotated points
-            not_is_gen = annot_file_df["gen."] == 0
-            annot_file_df = annot_file_df[is_pedestrian]
-            annot_file_df = annot_file_df[not_is_gen]
+            sdd_extract.add_xy_columns_to(annot_file_df)
 
-            annot_file_df["x"] = (annot_file_df["xmin"] + annot_file_df["xmax"]) / 2
-            annot_file_df["y"] = (annot_file_df["ymin"] + annot_file_df["ymax"]) / 2
+            # # we only care about pedestrians:
+            # is_pedestrian = annot_file_df["label"] == "Pedestrian"
+            # # we highlight manually annotated points
+            # not_is_gen = annot_file_df["gen."] == 0
+            # annot_file_df = annot_file_df[is_pedestrian]
+            # annot_file_df = annot_file_df[not_is_gen]
 
-            agents = annot_file_df["Id"].unique()
+            fig, ax = plt.subplots()
+            fig.canvas.manager.set_window_title(f"{scene_name.name}: {video_name.name}")
+            # fig.suptitle()
 
-            plt.figure(f"{scene_name.name}: {video_name.name}")
+            # drawing the example image onto the figure
+            ref_image = cv2.imread(ref_image_path)
+            ax.imshow(cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB))
 
-            sample_image = cv2.imread(sample_image_path)
-            plt.imshow(cv2.cvtColor(sample_image, cv2.COLOR_BGR2RGB))
-
-            for agent in agents:
-                x = annot_file_df[annot_file_df["Id"] == agent].loc[:, "x"].values
-                y = annot_file_df[annot_file_df["Id"] == agent].loc[:, "y"].values
-                plt.plot(x, y)
-                plt.scatter(x, y, s=1, c='b', marker=',')
+            # drawing trajectories onto the figure
+            draw_all_trajectories_onto_image(draw_ax=ax, traj_df=annot_file_df)
 
         plt.show()
 
