@@ -64,11 +64,16 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
 
 
 def main():
-    data_path = sdd_extract.get_config()["dataset"]["path"]
+
+    config_dict = sdd_extract.get_config()
+    data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
+    save = True
+    save_path = config_dict["results"]["fig_path"]
+    assert os.path.exists(save_path)
+
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
-        print(os.path.realpath(scene_name))
         for video_name in os.scandir(os.path.realpath(scene_name)):
             print(os.path.realpath(video_name))
             annot_file_path = os.path.join(data_path, "annotations", scene_name, video_name, "annotations.txt")
@@ -76,9 +81,16 @@ def main():
 
             annot_file_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
 
-            annot_file_df = sdd_data_processing.make_bool_columns(annot_file_df)
+            annot_file_df = sdd_data_processing.bool_columns_in(annot_file_df)
             annot_file_df = sdd_data_processing.completely_lost_trajs_removed_from(annot_file_df)
-            annot_file_df = sdd_data_processing.add_xy_columns_to(annot_file_df)
+            annot_file_df = sdd_data_processing.xy_columns_in(annot_file_df)
+            annot_file_df = sdd_data_processing.keep_masks_in(annot_file_df)
+            annot_file_df = annot_file_df[annot_file_df["keep"]]
+
+            # with pd.option_context('display.max_rows', None,
+            #                        'display.max_columns', None,
+            #                        'display.precision', 3,):
+            #     print(annot_file_df[["Id", "lost", "keep"]])
 
             # # we only care about pedestrians:
             # is_pedestrian = annot_file_df["label"] == "Pedestrian"
@@ -98,7 +110,10 @@ def main():
             # drawing trajectories onto the figure
             draw_all_trajectories_onto_image(draw_ax=ax, traj_df=annot_file_df)
 
-        plt.show()
+            if save:
+                plt.savefig(os.path.join(save_path, f"{scene_name.name}-{video_name.name}"))
+                plt.close()
+        # plt.show(block=True)
 
 
 if __name__ == '__main__':
