@@ -111,7 +111,7 @@ def main():
             draw_all_trajectories_onto_image(draw_ax=ax, traj_df=annot_file_df)
 
             if save:
-                plt.savefig(os.path.join(save_path, f"{scene_name.name}-{video_name.name}"))
+                plt.savefig(os.path.join(save_path, f"{scene_name.name}-{video_name.name}"), bbox_inches="tight")
                 plt.close()
         # plt.show(block=True)
 
