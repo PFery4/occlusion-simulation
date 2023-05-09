@@ -69,7 +69,7 @@ def main():
     data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
-    save = True
+    save = False
     save_path = config_dict["results"]["fig_path"]
     assert os.path.exists(save_path)
 
