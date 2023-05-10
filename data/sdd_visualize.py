@@ -18,6 +18,21 @@ SDD_CLASS_SYMBOLS = {'Pedestrian': 'P',     # pedestrian
                      'Cart': 'G'}           # golf cart
 
 
+def count_timesteps(annot_df: pd.DataFrame):
+    """
+    shows the number of timesteps recorded for a given scene annotation dataframe
+    :param annot_df: the annotation dataframe
+    :return: count, the total number of timesteps
+    """
+    frames = annot_df["frame"].unique()
+    n_timesteps = max(frames) - min(frames) + 1
+    # len(annot_df["frame"].unique())
+    return n_timesteps
+
+
+def timesteps_to_seconds(n, fps=30):
+    return n/fps
+
 def draw_single_trajectory_onto_image(draw_ax: matplotlib.axes.Axes, agent_df: pd.DataFrame, c):
     agent_class = agent_df["label"].iloc[0]
     frames = agent_df.loc[:, "frame"].values
@@ -69,23 +84,30 @@ def main():
     data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
+    show = True
     save = False
     save_path = config_dict["results"]["fig_path"]
     assert os.path.exists(save_path)
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
         for video_name in os.scandir(os.path.realpath(scene_name)):
-            print(os.path.realpath(video_name))
-            annot_file_path = os.path.join(data_path, "annotations", scene_name, video_name, "annotations.txt")
-            ref_image_path = os.path.join(data_path, "annotations", scene_name, video_name, "reference.jpg")
+            # print(os.path.realpath(video_name))
+            annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
+            ref_image_path = os.path.join(os.path.realpath(video_name), "reference.jpg")
 
             annot_file_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
+
+            # n_timesteps = count_timesteps(annot_file_df)
+            # duration = timesteps_to_seconds(n_timesteps)
+            # mins, sec = duration // 60, duration % 60
+            # print(f"{scene_name.name}, {video_name.name}: {n_timesteps} timesteps ({duration}s: {mins}m, {sec}s)")
 
             annot_file_df = sdd_data_processing.bool_columns_in(annot_file_df)
             annot_file_df = sdd_data_processing.completely_lost_trajs_removed_from(annot_file_df)
             annot_file_df = sdd_data_processing.xy_columns_in(annot_file_df)
             annot_file_df = sdd_data_processing.keep_masks_in(annot_file_df)
             annot_file_df = annot_file_df[annot_file_df["keep"]]
+            annot_file_df = sdd_data_processing.subsample_timesteps_from(annot_file_df)
 
             # with pd.option_context('display.max_rows', None,
             #                        'display.max_columns', None,
@@ -113,7 +135,11 @@ def main():
             if save:
                 plt.savefig(os.path.join(save_path, f"{scene_name.name}-{video_name.name}"), bbox_inches="tight")
                 plt.close()
-        # plt.show(block=True)
+
+            if show:
+                plt.show(block=True)
+                # plt.pause(5)
+                plt.close()
 
 
 if __name__ == '__main__':
