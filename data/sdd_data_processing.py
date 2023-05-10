@@ -39,12 +39,12 @@ def completely_lost_trajs_removed_from(annot_df: pd.DataFrame):
 
         # removing agents from the dataframe if all of their sequence elements are lost
         if np.all(agent_df["lost"].values):
-            print(f"DELETING AGENT {agent_id}: ALL LOST")
+            # print(f"DELETING AGENT {agent_id}: ALL LOST")
             annot_df = annot_df[annot_df["Id"] != agent_id]
 
         # also deleting trajectories which are way too short to conduct any meaningful king of prediction
         if np.count_nonzero(~agent_df["lost"].values) < 4:      # TODO: maybe change the '4' to a more meaningful value later (perhaps t_obs + t_pred, something like this...)
-            print(f"DELETING AGENT {agent_id}: TOO SHORT")
+            # print(f"DELETING AGENT {agent_id}: TOO SHORT")
             annot_df = annot_df[annot_df["Id"] != agent_id]
     return annot_df
 
@@ -84,4 +84,32 @@ def keep_masks_in(annot_df: pd.DataFrame):
     for agent_id in annot_df["Id"].unique():
         keep_mask = get_keep_mask_from(annot_df[annot_df["Id"] == agent_id])
         annot_df.loc[annot_df["Id"] == agent_id, "keep"] = keep_mask
+    return annot_df
+
+
+def subsample_timesteps_from(annot_df: pd.DataFrame, target_fps: float = 2.5, orig_fps: float = 30):
+    """
+    subsamples the annotation dataframe such that measurements are at the target fps
+
+    the default values for this function follow from the paper:
+    \"The Stanford Drone Dataset is More Complex than We Think: An Analysis of Key Characteristics\" - Andle et al.
+    https://arxiv.org/abs/2203.11743
+
+    CAREFUL WHEN SAMPLING AT OUT OF PHASE FPS
+    (the script does not verify that the resulting target fps will actually be the one desired)
+
+    :param annot_df: the scene annotation dataframe
+    :param target_fps: the target fps to sample annotations with
+    :param orig_fps: the original annotation fps
+    :return: the subsampled annotation dataframe
+    """
+    # todo: link orig_fps and target_fps to value in config file
+
+    t_start = annot_df["frame"].min()
+    t_end = annot_df["frame"].max()
+
+    frameskip = int(orig_fps // target_fps)
+    target_timesteps = list(range(t_start, t_end, frameskip))
+
+    annot_df = annot_df[annot_df["frame"].isin(target_timesteps)]
     return annot_df
