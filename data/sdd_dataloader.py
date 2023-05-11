@@ -6,6 +6,7 @@ import sdd_data_processing
 import numpy as np
 import cv2
 import torchvision.transforms
+import torch
 
 class StanfordDroneDataset(Dataset):
 
@@ -95,19 +96,36 @@ class StanfordDroneDataset(Dataset):
         image_tensor = self.img_transform(image)
 
         # extract the past and futures of present agents at the window starting at the given timestep
-
-        # TODO: FINISH HERE, EXTRACT PASTS AND FUTURES
-
+        # generate a window of the timesteps we are interested in extracting from the scene dataset
         window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + lookup["timestep"]
-        print(window)
-
+        # generate subdataframe of the scene with only the timesteps present within the window
         small_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
-        print(len(small_df), "hey")
+
+        labels = []
+        pasts = []
+        futures = []
 
         for agent_id in small_df["Id"].unique():
-            print(agent_id)
+            # label of the agent of interest
+            label = small_df[small_df["Id"] == agent_id].iloc[0].loc["label"]
 
-        return image_tensor
+            # empty sequence
+            sequence = np.empty((self.T_obs + self.T_pred, 2))
+            sequence.fill(np.nan)
+
+            # boolean array that indicates for the agent of interest which timesteps contain an observed measurement
+            observed_timesteps = np.in1d(window, small_df.loc[small_df["Id"] == agent_id, ["frame"]].values.flatten())
+
+            # filling the trajectory sequence according to the observed_timesteps boolean array
+            sequence[observed_timesteps, 0] = small_df.loc[small_df["Id"] == agent_id, ["x"]].values.flatten()
+            sequence[observed_timesteps, 1] = small_df.loc[small_df["Id"] == agent_id, ["y"]].values.flatten()
+
+            # appending data to lists of data
+            labels.append(label)
+            pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
+            futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+
+        return pasts, futures, labels, image_tensor
 
 
 if __name__ == '__main__':
