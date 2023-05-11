@@ -78,6 +78,17 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
+def visualize_training_instance(draw_ax: matplotlib.axes.Axes):
+    """
+    This function draws the trajectory segments of agents contained within one single training instance extracted from
+    the dataloader.
+
+    :param draw_ax: the matplotlib axes object onto which we are drawing
+    :return:
+    """
+    pass
+
+
 def main():
 
     config_dict = sdd_extract.get_config()
