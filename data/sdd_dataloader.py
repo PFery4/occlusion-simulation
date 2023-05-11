@@ -3,10 +3,12 @@ import pandas as pd
 from torch.utils.data import Dataset
 import sdd_extract
 import sdd_data_processing
+import sdd_visualize
 import numpy as np
 import cv2
 import torchvision.transforms
 import torch
+import matplotlib.pyplot as plt
 
 class StanfordDroneDataset(Dataset):
 
@@ -137,6 +139,20 @@ if __name__ == '__main__':
     print(dataset.frames)
     print(dataset.lookuptable)
     print(len(dataset))
-    dataset.__getitem__(0)
-    dataset.__getitem__(2)
-    dataset.__getitem__(-1)
+
+    idx_samples = np.random.randint(0, len(dataset), 10)
+
+    print(idx_samples)
+    for idx in idx_samples:
+        pasts, futures, labels, image_tensor = dataset.__getitem__(idx)
+
+        fig, ax = plt.subplots()
+        fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__({idx})")
+
+        sdd_visualize.visualize_training_instance(
+            draw_ax=ax, pasts=pasts, futures=futures, labels=labels, image_tensor=image_tensor
+        )
+
+        plt.show()
+
+
