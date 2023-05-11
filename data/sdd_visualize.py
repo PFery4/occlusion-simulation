@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 import pandas as pd
+import torchvision.transforms
 
 import sdd_extract
 import sdd_data_processing
@@ -78,7 +79,7 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
-def visualize_training_instance(draw_ax: matplotlib.axes.Axes):
+def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
     """
     This function draws the trajectory segments of agents contained within one single training instance extracted from
     the dataloader.
@@ -86,11 +87,30 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes):
     :param draw_ax: the matplotlib axes object onto which we are drawing
     :return:
     """
-    pass
+    # first draw the reference image onto the axis
+    if "image_tensor" in kwargs:
+        draw_ax.imshow(kwargs["image_tensor"].permute(1, 2, 0))
+
+    # draw the past trajectories
+    if "pasts" in kwargs:
+        color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["pasts"]))))
+        print(kwargs["pasts"])
+        for past in kwargs["pasts"]:
+            c = next(color_iter).reshape(1, -1)
+            draw_ax.plot(past[:, 0], past[:, 1], c=c)
+            draw_ax.scatter(past[:, 0], past[:, 1], c=c, marker="+")
+
+    # draw the future trajectories
+    if "futures" in kwargs:
+        color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["futures"]))))
+        print(kwargs["futures"])
+        for future in kwargs["futures"]:
+            c = next(color_iter).reshape(1, -1)
+            draw_ax.plot(future[:, 0], future[:, 1], c=c, alpha=0.7)
+            draw_ax.scatter(future[:, 0], future[:, 1], c=c, marker="x", alpha=0.7)
 
 
-def main():
-
+def visualize_full_trajectories_on_all_scenes():
     config_dict = sdd_extract.get_config()
     data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
@@ -151,6 +171,10 @@ def main():
                 plt.show(block=True)
                 # plt.pause(5)
                 plt.close()
+
+
+def main():
+    visualize_full_trajectories_on_all_scenes()
 
 
 if __name__ == '__main__':
