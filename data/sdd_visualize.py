@@ -94,7 +94,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
     # draw the past trajectories
     if "pasts" in kwargs:
         color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["pasts"]))))
-        print(kwargs["pasts"])
+        # print(kwargs["pasts"])
         for past in kwargs["pasts"]:
             c = next(color_iter).reshape(1, -1)
             draw_ax.plot(past[:, 0], past[:, 1], c=c)
@@ -103,7 +103,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
     # draw the future trajectories
     if "futures" in kwargs:
         color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["futures"]))))
-        print(kwargs["futures"])
+        # print(kwargs["futures"])
         for future in kwargs["futures"]:
             c = next(color_iter).reshape(1, -1)
             draw_ax.plot(future[:, 0], future[:, 1], c=c, alpha=0.7)
