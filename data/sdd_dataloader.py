@@ -140,19 +140,23 @@ if __name__ == '__main__':
     print(dataset.lookuptable)
     print(len(dataset))
 
-    idx_samples = np.random.randint(0, len(dataset), 10)
+    fig, axes = plt.subplots(4, 4)
+    fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__()")
+
+    idx_samples = np.sort(np.random.randint(0, len(dataset), 16))
 
     print(idx_samples)
-    for idx in idx_samples:
+    for ax_k, idx in enumerate(idx_samples):
+
+        ax_x, ax_y = ax_k // 4, ax_k % 4
+
         pasts, futures, labels, image_tensor = dataset.__getitem__(idx)
 
-        fig, ax = plt.subplots()
-        fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__({idx})")
-
+        axes[ax_x, ax_y].title.set_text(idx)
         sdd_visualize.visualize_training_instance(
-            draw_ax=ax, pasts=pasts, futures=futures, labels=labels, image_tensor=image_tensor
+            draw_ax=axes[ax_x, ax_y], pasts=pasts, futures=futures, labels=labels, image_tensor=image_tensor
         )
 
-        plt.show()
+    plt.show()
 
 
