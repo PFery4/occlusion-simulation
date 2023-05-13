@@ -2,3 +2,4 @@
 **/__pycache__
 results
 config.yaml
+data/pickled_dataloaders
