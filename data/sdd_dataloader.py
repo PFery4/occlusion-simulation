@@ -13,6 +13,7 @@ import pickle
 import json
 import uuid
 
+
 class StanfordDroneDataset(Dataset):
 
     def __init__(self, config_dict):
@@ -78,12 +79,22 @@ class StanfordDroneDataset(Dataset):
                         # print(idx, window)
 
                         # some timesteps are inexistant in the dataframe, due to the absence of any annotations at those
-                        # points in time. we check that we can have a complete window. (note that some agents might not have
-                        # all their timesteps present within the window)
-                        if (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all():
+                        # points in time. we check that we can have a complete window.
+                        # (note that with this criterion validates,
+                        # some agents might not have all their timesteps present within the window)
+                        window_is_continuous = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
+
+                        # we are only interested in windows with at least 1 fully described trajectory, that is,
+                        # with at least one agent who's observed at all timesteps in the window
+                        # TODO: DEAL WITH THIS ANOTHER WAY. THIS IS MESSY, SLOW AND UGLY
+                        at_least_1_full_traj = False
+                        for agent_id in annot_df["Id"].unique():
+                            if len(annot_df.loc[(annot_df["Id"] == agent_id) & (annot_df["frame"].isin(window))]["frame"].index) == len(window):
+                                at_least_1_full_traj = True
+                                break
+
+                        if window_is_continuous and at_least_1_full_traj:
                             self.lookuptable.loc[len(self.lookuptable)] = {"scene/video": scene_key, "timestep": timestep}
-                            # self.lookuptable.append({"scene/video": scene_key, "timestep": timestep}, ignore_index=True)
-                            # annot_df.loc[annot_df["frame"] == timestep, ["window"]] = True
                         # else:
                         #     print(f"FOUND WRONG WINDOW; {idx} ; {window}")
 
@@ -164,6 +175,7 @@ class StanfordDroneDataset(Dataset):
             with open(jsonfile) as f:
                 if json.load(f) == self.metadata_dict():
                     return f"{os.path.splitext(jsonfile)[0]}.pickle"
+        return None
 
     def save_data(self, path):
         """
@@ -197,6 +209,8 @@ if __name__ == '__main__':
 
     dataset = StanfordDroneDataset(config_dict=config)
 
+    print(f"{len(dataset)=}")
+
     fig, axes = plt.subplots(4, 4)
     fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__()")
 
@@ -215,5 +229,3 @@ if __name__ == '__main__':
         )
 
     plt.show()
-
-
