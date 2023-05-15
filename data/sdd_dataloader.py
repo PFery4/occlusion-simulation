@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import pickle
 import json
 import uuid
+import time
 
 
 class StanfordDroneDataset(Dataset):
@@ -35,7 +36,7 @@ class StanfordDroneDataset(Dataset):
             # the lookuptable is a dataframe separate from the dataframe containing all trajectory data.
             # each row fully describes a complete training instance,
             # with its corresponding video/scene name, and timestep.
-            self.lookuptable = pd.DataFrame(columns=["scene/video", "timestep"])
+            self.lookuptable = pd.DataFrame(columns=["scene/video", "timestep", "full_obs", "present"])
 
             frames = []
             scene_keys = []
@@ -46,7 +47,7 @@ class StanfordDroneDataset(Dataset):
                 for video_name in os.scandir(os.path.realpath(scene_name)):
                     scene_key = f"{scene_name.name}/{video_name.name}"
                     annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
-                    print(annot_file_path)
+                    print(f"Processing: {annot_file_path}")
                     assert os.path.exists(annot_file_path)
 
                     annot_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
@@ -60,22 +61,14 @@ class StanfordDroneDataset(Dataset):
                     annot_df = sdd_data_processing.subsample_timesteps_from(
                         annot_df, target_fps=self.fps, orig_fps=self.orig_fps
                     )
-                    # annot_df["scene_name"] = scene_name.name
-                    # annot_df["video_name"] = video_name.name
-                    # annot_df["window"] = False
-                    # annot_df["scene/video"] = f"{scene_name.name}/{video_name.name}"
 
-                    # print(annot_df[["Id", "frame"]])
-                    # print(scene_name.name, video_name.name)
                     timesteps = sorted(annot_df["frame"].unique())
-                    # print(timesteps)
-                    # assert (np.array(timesteps[:-1]) + int(self.orig_fps//self.fps) == np.array(timesteps[1:])).all()
 
                     # We are interested in time windows of [-T_obs : T_pred].
-                    # But only windows which contain at least one agent for us to be able to predict, otherwise there's
-                    # nothing useful in a training instance.
-                    for idx, timestep in enumerate(timesteps[:-(self.T_obs + self.T_pred - 1)]):
-                        window = np.array(timesteps[idx: idx + self.T_obs + self.T_pred - 1])
+                    # But only windows which contain at least one agent for us to be able to predict,
+                    # otherwise the training instance is useless.
+                    for t_idx, timestep in enumerate(timesteps[:-(self.T_obs + self.T_pred)]):
+                        window = np.array(timesteps[t_idx: t_idx + self.T_obs + self.T_pred])
                         # print(idx, window)
 
                         # some timesteps are inexistant in the dataframe, due to the absence of any annotations at those
@@ -84,19 +77,25 @@ class StanfordDroneDataset(Dataset):
                         # some agents might not have all their timesteps present within the window)
                         window_is_continuous = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
 
-                        # we are only interested in windows with at least 1 fully described trajectory, that is,
-                        # with at least one agent who's observed at all timesteps in the window
-                        # TODO: DEAL WITH THIS ANOTHER WAY. THIS IS MESSY, SLOW AND UGLY
-                        at_least_1_full_traj = False
-                        for agent_id in annot_df["Id"].unique():
-                            if len(annot_df.loc[(annot_df["Id"] == agent_id) & (annot_df["frame"].isin(window))]["frame"].index) == len(window):
-                                at_least_1_full_traj = True
-                                break
+                        if window_is_continuous:
+                            mini_df = annot_df[annot_df["frame"].isin(window)]
+                            all_present_agents = mini_df["Id"].unique()
 
-                        if window_is_continuous and at_least_1_full_traj:
-                            self.lookuptable.loc[len(self.lookuptable)] = {"scene/video": scene_key, "timestep": timestep}
-                        # else:
-                        #     print(f"FOUND WRONG WINDOW; {idx} ; {window}")
+                            # we are only interested in windows with at least 1 fully described trajectory, that is,
+                            # with at least one agent who's observed at all timesteps in the window
+                            fully_observed_agents = [agent_id for agent_id in all_present_agents if
+                                                     (mini_df["Id"].values == agent_id).sum() ==
+                                                     self.T_obs + self.T_pred]
+                            present_agents = [agent_id for agent_id in all_present_agents if
+                                              agent_id not in fully_observed_agents]
+
+                            if fully_observed_agents:
+                                self.lookuptable.loc[len(self.lookuptable)] = {
+                                    "scene/video": scene_key,
+                                    "timestep": timestep,
+                                    "full_obs": fully_observed_agents,
+                                    "present": present_agents
+                                }
 
                     frames.append(annot_df)
                     scene_keys.append(scene_key)
@@ -120,35 +119,53 @@ class StanfordDroneDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_tensor = self.img_transform(image)
 
-        # extract the past and futures of present agents at the window starting at the given timestep
         # generate a window of the timesteps we are interested in extracting from the scene dataset
         window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + lookup["timestep"]
         # generate subdataframe of the scene with only the timesteps present within the window
-        small_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
+        mini_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
 
+        # extract the trajectories of fully observed agents
         labels = []
         pasts = []
         futures = []
 
-        for agent_id in small_df["Id"].unique():
+        for agent_id in lookup["full_obs"]:
             # label of the agent of interest
-            label = small_df[small_df["Id"] == agent_id].iloc[0].loc["label"]
+            label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
 
             # empty sequence
             sequence = np.empty((self.T_obs + self.T_pred, 2))
             sequence.fill(np.nan)
 
-            # boolean array that indicates for the agent of interest which timesteps contain an observed measurement
-            observed_timesteps = np.in1d(window, small_df.loc[small_df["Id"] == agent_id, ["frame"]].values.flatten())
+            sequence[:, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
+            sequence[:, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
 
-            # filling the trajectory sequence according to the observed_timesteps boolean array
-            sequence[observed_timesteps, 0] = small_df.loc[small_df["Id"] == agent_id, ["x"]].values.flatten()
-            sequence[observed_timesteps, 1] = small_df.loc[small_df["Id"] == agent_id, ["y"]].values.flatten()
+            assert not np.isnan(sequence).any()
 
-            # appending data to lists of data
             labels.append(label)
             pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
             futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+
+        # # extract the trajectories of partially observed agents
+        # for agent_id in lookup["present"]:
+        #     # label of the agent of interest
+        #     label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
+        #
+        #     # empty sequence
+        #     sequence = np.empty((self.T_obs + self.T_pred, 2))
+        #     sequence.fill(np.nan)
+        #
+        #     # boolean array that indicates for the agent of interest which timesteps contain an observed measurement
+        #     observed_timesteps = np.in1d(window, mini_df.loc[mini_df["Id"] == agent_id, ["frame"]].values.flatten())
+        #
+        #     # filling the trajectory sequence according to the observed_timesteps boolean array
+        #     sequence[observed_timesteps, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
+        #     sequence[observed_timesteps, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
+        #
+        #     # appending data to lists of data
+        #     labels.append(label)
+        #     pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
+        #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
 
         return pasts, futures, labels, image_tensor
 
@@ -207,8 +224,12 @@ if __name__ == '__main__':
 
     config = sdd_extract.get_config()
 
+    before = time.time()
     dataset = StanfordDroneDataset(config_dict=config)
+    after = time.time()
+    print(after - before, "seconds for dataset instantiation")
 
+    print(dataset.lookuptable)
     print(f"{len(dataset)=}")
 
     fig, axes = plt.subplots(4, 4)
@@ -221,7 +242,10 @@ if __name__ == '__main__':
 
         ax_x, ax_y = ax_k // 4, ax_k % 4
 
+        before = time.time()
         pasts, futures, labels, image_tensor = dataset.__getitem__(idx)
+        after = time.time()
+        print(f"getitem({idx}) took {after - before} seconds")
 
         axes[ax_x, ax_y].title.set_text(idx)
         sdd_visualize.visualize_training_instance(
