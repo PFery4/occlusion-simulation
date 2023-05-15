@@ -224,12 +224,7 @@ if __name__ == '__main__':
 
     config = sdd_extract.get_config()
 
-    before = time.time()
     dataset = StanfordDroneDataset(config_dict=config)
-    after = time.time()
-    print(after - before, "seconds for dataset instantiation")
-
-    print(dataset.lookuptable)
     print(f"{len(dataset)=}")
 
     fig, axes = plt.subplots(4, 4)
