@@ -87,6 +87,8 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
     :param draw_ax: the matplotlib axes object onto which we are drawing
     :return:
     """
+    # TODO: maybe add a check to draw partially observed trajectories in gray
+
     # first draw the reference image onto the axis
     if "image_tensor" in kwargs:
         draw_ax.imshow(kwargs["image_tensor"].permute(1, 2, 0))
@@ -108,7 +110,6 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
             c = next(color_iter).reshape(1, -1)
             draw_ax.plot(future[:, 0], future[:, 1], c=c, alpha=0.7)
             draw_ax.scatter(future[:, 0], future[:, 1], c=c, marker="x", alpha=0.7)
-
 
 def visualize_full_trajectories_on_all_scenes():
     config_dict = sdd_extract.get_config()
