@@ -54,14 +54,11 @@ class StanfordDroneDataset(Dataset):
                     annot_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
 
                     # perform preprocessing steps when reading the data
-                    annot_df = annot_df[annot_df["label"].isin(self.agent_classes)]
-                    annot_df = sdd_data_processing.bool_columns_in(annot_df)
-                    annot_df = sdd_data_processing.completely_lost_trajs_removed_from(annot_df)
-                    annot_df = sdd_data_processing.xy_columns_in(annot_df)
-                    annot_df = sdd_data_processing.keep_masks_in(annot_df)
-                    annot_df = annot_df[annot_df["keep"]]
-                    annot_df = sdd_data_processing.subsample_timesteps_from(
-                        annot_df, target_fps=self.fps, orig_fps=self.orig_fps
+                    annot_df = sdd_data_processing.perform_preprocessing_pipeline(
+                        annot_df=annot_df,
+                        agent_types=self.agent_classes,
+                        target_fps=self.fps,
+                        orig_fps=self.orig_fps
                     )
 
                     timesteps = sorted(annot_df["frame"].unique())
