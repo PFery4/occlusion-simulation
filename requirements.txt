@@ -1,3 +1,6 @@
+# TODO TODO -_-
+# Ideally actually change the contents to that of a proper requirements.txt file
+
 conda create --name occl-pred python=3.8
 
 conda install -c conda-forge opencv
