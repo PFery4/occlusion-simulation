@@ -23,6 +23,7 @@ class StanfordDroneDataset(Dataset):
         self.fps = config_dict["hyperparameters"]["fps"]
         self.T_obs = config_dict["hyperparameters"]["T_obs"]
         self.T_pred = config_dict["hyperparameters"]["T_pred"]
+        self.agent_classes = config_dict["hyperparameters"]["agent_types"]
 
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
@@ -53,6 +54,7 @@ class StanfordDroneDataset(Dataset):
                     annot_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
 
                     # perform preprocessing steps when reading the data
+                    annot_df = annot_df[annot_df["label"].isin(self.agent_classes)]
                     annot_df = sdd_data_processing.bool_columns_in(annot_df)
                     annot_df = sdd_data_processing.completely_lost_trajs_removed_from(annot_df)
                     annot_df = sdd_data_processing.xy_columns_in(annot_df)
@@ -73,11 +75,11 @@ class StanfordDroneDataset(Dataset):
 
                         # some timesteps are inexistant in the dataframe, due to the absence of any annotations at those
                         # points in time. we check that we can have a complete window.
-                        # (note that with this criterion validates,
-                        # some agents might not have all their timesteps present within the window)
-                        window_is_continuous = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
+                        # (note that a complete window means we have at least one observation present for each timestep,
+                        # some agents might not have all their timesteps observed)
+                        window_is_complete = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
 
-                        if window_is_continuous:
+                        if window_is_complete:
                             mini_df = annot_df[annot_df["frame"].isin(window)]
                             all_present_agents = mini_df["Id"].unique()
 
@@ -175,7 +177,8 @@ class StanfordDroneDataset(Dataset):
             "orig_fps": self.orig_fps,
             "fps": self.fps,
             "T_obs": self.T_obs,
-            "T_pred": self.T_pred
+            "T_pred": self.T_pred,
+            "agent_classes": self.agent_classes
         }
         return metadata_dict
 
@@ -208,7 +211,7 @@ class StanfordDroneDataset(Dataset):
 
         # save metadata as a json with same file name as pickle file
         with open(os.path.join(path, f"{save_name}.json"), "w", encoding="utf8") as f:
-            json.dump(self.metadata_dict(), f, indent=0)
+            json.dump(self.metadata_dict(), f, indent=4)
 
     def load_data(self, filepath):
         """
