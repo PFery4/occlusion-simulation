@@ -42,7 +42,7 @@ def completely_lost_trajs_removed_from(annot_df: pd.DataFrame):
             # print(f"DELETING AGENT {agent_id}: ALL LOST")
             annot_df = annot_df[annot_df["Id"] != agent_id]
 
-        # also deleting trajectories which are way too short to conduct any meaningful king of prediction
+        # also deleting trajectories which are way too short to conduct any meaningful kind of prediction
         if np.count_nonzero(~agent_df["lost"].values) < 4:      # TODO: maybe change the '4' to a more meaningful value later (perhaps t_obs + t_pred, something like this...)
             # print(f"DELETING AGENT {agent_id}: TOO SHORT")
             annot_df = annot_df[annot_df["Id"] != agent_id]
@@ -103,8 +103,6 @@ def subsample_timesteps_from(annot_df: pd.DataFrame, target_fps: float = 2.5, or
     :param orig_fps: the original annotation fps
     :return: the subsampled annotation dataframe
     """
-    # todo: link orig_fps and target_fps to value in config file
-
     t_start = annot_df["frame"].min()
     t_end = annot_df["frame"].max()
 
