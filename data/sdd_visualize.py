@@ -1,12 +1,9 @@
 import os
-
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 import pandas as pd
-import torchvision.transforms
-
 import sdd_extract
 import sdd_data_processing
 
