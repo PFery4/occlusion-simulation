@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from typing import List
 
 
 def bool_columns_in(annot_df: pd.DataFrame):
@@ -112,3 +113,33 @@ def subsample_timesteps_from(annot_df: pd.DataFrame, target_fps: float = 2.5, or
 
     annot_df = annot_df[annot_df["frame"].isin(target_timesteps)]
     return annot_df
+
+
+def perform_preprocessing_pipeline(
+        annot_df: pd.DataFrame, agent_types: List[str], target_fps: float = 2.5, orig_fps: float = 30
+):
+    """
+    performs the entire following preprocessing pipeline on the provided pandas dataframe:
+        - removal of every agent not belonging to the classes specified by agent_types
+        - transformation of relevant columns into boolean columns
+        - removal of trajectories for which all timesteps are "lost"
+        - addition of centroid positions
+        - filters out partially "lost" trajectories according to protocol from Andle et.al.
+        - subsamples trajectory positions for a target framerate
+    :param annot_df: the dataframe to run the preprocessing on
+    :param agent_types: the agent classes to keep.
+                        must be a subset of ["Pedestrian", "Biker", "Skater", "Car", "Bus", "Cart"]
+    :param target_fps: the target fps to sample annotations with
+    :param orig_fps: the original annotation fps
+    :return: the preprocessed dataframe
+    """
+
+    out_df = annot_df[annot_df["label"].isin(agent_types)]
+    out_df = bool_columns_in(out_df)
+    out_df = completely_lost_trajs_removed_from(out_df)
+    out_df = xy_columns_in(out_df)
+    out_df = keep_masks_in(out_df)
+    out_df = out_df[out_df["keep"]]
+    out_df = subsample_timesteps_from(out_df, target_fps=target_fps, orig_fps=orig_fps)
+
+    return out_df
