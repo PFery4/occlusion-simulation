@@ -9,9 +9,7 @@ def bool_columns_in(annot_df: pd.DataFrame):
     :param annot_df: the annotation dataframe
     :return: annot_df
     """
-    annot_df["lost"] = annot_df["lost"].astype(bool)
-    annot_df["occl."] = annot_df["occl."].astype(bool)
-    annot_df["gen."] = annot_df["gen."].astype(bool)
+    annot_df = annot_df.astype({"lost": bool, "occl.": bool, "gen.": bool})
     return annot_df
 
 
@@ -132,12 +130,12 @@ def perform_preprocessing_pipeline(
     :return: the preprocessed dataframe
     """
 
-    out_df = annot_df[annot_df["label"].isin(agent_types)]
-    out_df = bool_columns_in(out_df)
-    out_df = completely_lost_trajs_removed_from(out_df)
-    out_df = xy_columns_in(out_df)
-    out_df = keep_masks_in(out_df)
-    out_df = out_df[out_df["keep"]]
-    out_df = subsample_timesteps_from(out_df, target_fps=target_fps, orig_fps=orig_fps)
+    annot_df = annot_df[annot_df["label"].isin(agent_types)]
+    annot_df = bool_columns_in(annot_df)
+    annot_df = completely_lost_trajs_removed_from(annot_df)
+    annot_df = xy_columns_in(annot_df)
+    annot_df = keep_masks_in(annot_df)
+    annot_df = annot_df[annot_df["keep"]]
+    annot_df = subsample_timesteps_from(annot_df, target_fps=target_fps, orig_fps=orig_fps)
 
-    return out_df
+    return annot_df
