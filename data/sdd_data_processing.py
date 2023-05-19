@@ -132,10 +132,10 @@ def perform_preprocessing_pipeline(
 
     annot_df = annot_df[annot_df["label"].isin(agent_types)]
     annot_df = bool_columns_in(annot_df)
-    annot_df = completely_lost_trajs_removed_from(annot_df)
     annot_df = xy_columns_in(annot_df)
+    annot_df = completely_lost_trajs_removed_from(annot_df)
     annot_df = keep_masks_in(annot_df)
     annot_df = annot_df[annot_df["keep"]]
-    annot_df = subsample_timesteps_from(annot_df, target_fps=target_fps, orig_fps=orig_fps)
+    annot_df = subsample_timesteps_from(annot_df, target_fps=target_fps, orig_fps=orig_fps)     # TODO: move timestep subsampling earlier in preprocessing pipeline?
 
     return annot_df
