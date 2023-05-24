@@ -73,37 +73,36 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
-def visualize_training_instance(draw_ax: matplotlib.axes.Axes, **kwargs):
+def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict):
     """
     This function draws the trajectory segments of agents contained within one single training instance extracted from
     the dataloader.
 
     :param draw_ax: the matplotlib axes object onto which we are drawing
+    :param instance_dict: dictionary containing the following:
+        - 'image_tensor': a torch tensor containing the reference image data
+        - 'pasts': a list of torch tensors with coordinates of the past trajectories of agents
+        - 'futures': a list of torch tensors with coordinates of the future trajectories of agents
+        - 'labels': a list of corresponding agent labels (ie, the class they belong to)
+        - 'is_fully_observed': for a corresponding agent, whether all past and future timesteps are available
     :return:
     """
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
     # first draw the reference image onto the axis
-    if "image_tensor" in kwargs:
-        draw_ax.imshow(kwargs["image_tensor"].permute(1, 2, 0))
+    draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
 
-    # draw the past trajectories
-    if "pasts" in kwargs:
-        color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["pasts"]))))
-        # print(kwargs["pasts"])
-        for past in kwargs["pasts"]:
-            c = next(color_iter).reshape(1, -1)
-            draw_ax.plot(past[:, 0], past[:, 1], c=c)
-            draw_ax.scatter(past[:, 0], past[:, 1], c=c, marker="+")
+    color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["pasts"]))))
+    for past, future, label, full_obs in zip(
+            instance_dict["pasts"],
+            instance_dict["futures"],
+            instance_dict["labels"],
+            instance_dict["is_fully_observed"]
+    ):
+        c = next(color_iter).reshape(1, -1) if full_obs else "gray"
 
-    # draw the future trajectories
-    if "futures" in kwargs:
-        color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(kwargs["futures"]))))
-        # print(kwargs["futures"])
-        for future in kwargs["futures"]:
-            c = next(color_iter).reshape(1, -1)
-            draw_ax.plot(future[:, 0], future[:, 1], c=c, alpha=0.7)
-            draw_ax.scatter(future[:, 0], future[:, 1], c=c, marker="x", alpha=0.7)
+        draw_ax.plot(past[:, 0], past[:, 1], c=c)
+        draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
 
 
 def visualize_full_trajectories_on_all_scenes():
