@@ -117,7 +117,7 @@ def visualize_full_trajectories_on_all_scenes():
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
         for video_name in os.scandir(os.path.realpath(scene_name)):
-            # print(os.path.realpath(video_name))
+            print(os.path.realpath(video_name))
             annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
             ref_image_path = os.path.join(os.path.realpath(video_name), "reference.jpg")
 
