@@ -127,6 +127,7 @@ class StanfordDroneDataset(Dataset):
         labels = []
         pasts = []
         futures = []
+        is_fully_observed = []
 
         for agent_id in lookup["full_obs"]:
             # label of the agent of interest
@@ -144,6 +145,7 @@ class StanfordDroneDataset(Dataset):
             labels.append(label)
             pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
             futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+            is_fully_observed.append(True)
 
         # # extract the trajectories of partially observed agents
         # for agent_id in lookup["present"]:
@@ -165,8 +167,17 @@ class StanfordDroneDataset(Dataset):
         #     labels.append(label)
         #     pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
         #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+        #     is_fully_observed.append(False)
 
-        return pasts, futures, labels, image_tensor
+        instance_dict = {
+            "pasts": pasts,
+            "futures": futures,
+            "labels": labels,
+            "is_fully_observed": is_fully_observed,
+            "image_tensor": image_tensor
+        }
+
+        return instance_dict
 
     def metadata_dict(self):
         metadata_dict = {
@@ -238,13 +249,13 @@ if __name__ == '__main__':
         ax_x, ax_y = ax_k // 4, ax_k % 4
 
         before = time.time()
-        pasts, futures, labels, image_tensor = dataset.__getitem__(idx)
+        instance_dict = dataset.__getitem__(idx)
         after = time.time()
         print(f"getitem({idx}) took {after - before} seconds")
 
         axes[ax_x, ax_y].title.set_text(idx)
         sdd_visualize.visualize_training_instance(
-            draw_ax=axes[ax_x, ax_y], pasts=pasts, futures=futures, labels=labels, image_tensor=image_tensor
+            draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
         )
 
     plt.show()
