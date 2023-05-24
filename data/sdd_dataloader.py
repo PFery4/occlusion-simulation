@@ -23,6 +23,7 @@ class StanfordDroneDataset(Dataset):
         self.fps = config_dict["hyperparameters"]["fps"]
         self.T_obs = config_dict["hyperparameters"]["T_obs"]
         self.T_pred = config_dict["hyperparameters"]["T_pred"]
+        self.min_n = config_dict["hyperparameters"]["min_N_agents"]
         self.agent_classes = config_dict["hyperparameters"]["agent_types"]
 
         # to convert cv2 image to torch tensor
@@ -88,7 +89,7 @@ class StanfordDroneDataset(Dataset):
                             present_agents = [agent_id for agent_id in all_present_agents if
                                               agent_id not in fully_observed_agents]
 
-                            if fully_observed_agents:
+                            if len(fully_observed_agents) >= self.min_n:
                                 self.lookuptable.loc[len(self.lookuptable)] = {
                                     "scene/video": scene_key,
                                     "timestep": timestep,
@@ -186,6 +187,7 @@ class StanfordDroneDataset(Dataset):
             "fps": self.fps,
             "T_obs": self.T_obs,
             "T_pred": self.T_pred,
+            "min_n": self.min_n,
             "agent_classes": self.agent_classes
         }
         return metadata_dict
