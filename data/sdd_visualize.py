@@ -102,6 +102,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         c = next(color_iter).reshape(1, -1) if full_obs else "gray"
 
         draw_ax.plot(past[:, 0], past[:, 1], c=c)
+        draw_ax.scatter(past[-1, 0], past[-1, 1], s=40, marker=f"${SDD_CLASS_SYMBOLS[label]}$", alpha=0.8, c=c)
         draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
 
 
