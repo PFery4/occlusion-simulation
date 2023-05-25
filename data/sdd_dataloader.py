@@ -242,15 +242,18 @@ if __name__ == '__main__':
     dataset = StanfordDroneDataset(config_dict=config)
     print(f"{len(dataset)=}")
 
-    fig, axes = plt.subplots(4, 4)
+    n_rows = 3
+    n_cols = n_rows
+
+    fig, axes = plt.subplots(n_rows, n_cols)
     fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__()")
 
-    idx_samples = np.sort(np.random.randint(0, len(dataset), 16))
+    idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
 
     print(idx_samples)
     for ax_k, idx in enumerate(idx_samples):
 
-        ax_x, ax_y = ax_k // 4, ax_k % 4
+        ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
 
         before = time.time()
         instance_dict = dataset.__getitem__(idx)
