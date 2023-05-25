@@ -1,9 +1,6 @@
 import os.path
 import pandas as pd
 from torch.utils.data import Dataset
-import sdd_extract
-import sdd_data_processing
-import sdd_visualize
 import numpy as np
 import cv2
 import torchvision.transforms
@@ -13,6 +10,9 @@ import pickle
 import json
 import uuid
 import time
+import data.sdd_extract as sdd_extract
+import data.sdd_data_processing as sdd_data_processing
+import data.sdd_visualize as sdd_visualize
 
 
 class StanfordDroneDataset(Dataset):

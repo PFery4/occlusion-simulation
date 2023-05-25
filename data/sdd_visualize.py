@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 import pandas as pd
-import sdd_extract
-import sdd_data_processing
+import data.sdd_extract as sdd_extract
+import data.sdd_data_processing as sdd_data_processing
 
 
 SDD_CLASS_SYMBOLS = {'Pedestrian': 'P',     # pedestrian
