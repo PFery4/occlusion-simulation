@@ -125,6 +125,7 @@ class StanfordDroneDataset(Dataset):
         mini_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
 
         # extract the trajectories of fully observed agents
+        agent_ids = []
         labels = []
         pasts = []
         futures = []
@@ -143,6 +144,7 @@ class StanfordDroneDataset(Dataset):
 
             assert not np.isnan(sequence).any()
 
+            agent_ids.append(agent_id)
             labels.append(label)
             pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
             futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
@@ -165,6 +167,7 @@ class StanfordDroneDataset(Dataset):
         #     sequence[observed_timesteps, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
         #
         #     # appending data to lists of data
+        #     agent_ids.append(agent_id)
         #     labels.append(label)
         #     pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
         #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
@@ -173,6 +176,7 @@ class StanfordDroneDataset(Dataset):
         instance_dict = {
             "scene_key": lookup["scene/video"],
             "timestep": lookup["timestep"],
+            "agent_ids": agent_ids,
             "pasts": pasts,
             "futures": futures,
             "labels": labels,
@@ -242,11 +246,11 @@ if __name__ == '__main__':
     dataset = StanfordDroneDataset(config_dict=config)
     print(f"{len(dataset)=}")
 
-    n_rows = 3
+    n_rows = 2
     n_cols = n_rows
 
     fig, axes = plt.subplots(n_rows, n_cols)
-    fig.canvas.manager.set_window_title(f"StanfordDroneDataset.__getitem__()")
+    fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
 
     idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
 
