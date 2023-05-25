@@ -93,17 +93,20 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
 
     color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["pasts"]))))
-    for past, future, label, full_obs in zip(
+    for agent_id, past, future, label, full_obs in zip(
+            instance_dict["agent_ids"],
             instance_dict["pasts"],
             instance_dict["futures"],
             instance_dict["labels"],
             instance_dict["is_fully_observed"]
     ):
-        c = next(color_iter).reshape(1, -1) if full_obs else "gray"
+        c = next(color_iter).reshape(1, -1) if full_obs else "gray"     # todo: change this later. I don't know how, but I don't like this way of doing things
 
         draw_ax.plot(past[:, 0], past[:, 1], c=c)
-        draw_ax.scatter(past[-1, 0], past[-1, 1], s=40, marker=f"${SDD_CLASS_SYMBOLS[label]}$", alpha=0.8, c=c)
+        draw_ax.scatter(past[-1, 0], past[-1, 1],
+                        s=40, marker="x", c=c, label=f"${SDD_CLASS_SYMBOLS[label]}^{{{agent_id}}}$")
         draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
+        draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
 
 
 def visualize_full_trajectories_on_all_scenes():
