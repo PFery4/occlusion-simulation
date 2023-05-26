@@ -22,14 +22,13 @@ def no_ego_cone(point, u, theta, frame_box):
     # generate the polygon corresponding to the intersection of:
     # an infinite cone pointing towards unit_vec u and with a taper angle 2*theta, and with extremety located at point
     # and the frame_box polygon
-    print(np.max(frame_box.bounds))
-    giant_stride = -u * 2 * np.max(frame_box.bounds)        # large vector, to guarantee cone is equivalent to infinite
+    big_vec = -u * 2 * np.max(frame_box.bounds)        # large vector, to guarantee cone is equivalent to infinite
 
-    p1 = rotation_matrix(theta) @ giant_stride + point
-    p2 = rotation_matrix(-theta) @ giant_stride + point
+    p1 = rotation_matrix(theta) @ big_vec + point
+    p2 = rotation_matrix(-theta) @ big_vec + point
 
-    p3 = p1 + giant_stride
-    p4 = p2 + giant_stride
+    p3 = p1 + big_vec
+    p4 = p2 + big_vec
 
     return Polygon([point, p1, p3, p4, p2, point]).intersection(frame_box)
 
@@ -115,8 +114,6 @@ def place_ego(instance_dict: dict):
     no_ego = unary_union((no_ego_1, no_ego_2, too_close))
 
     plot_polygon(ax, no_ego)
-
-
 
     plt.show()
 
