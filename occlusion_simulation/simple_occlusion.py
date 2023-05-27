@@ -3,9 +3,12 @@ import numpy as np
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
 import data.sdd_visualize as sdd_visualize
-from shapely.geometry import LineString, Polygon
-from matplotlib.patches import Polygon as mpl_polygon
-from shapely.ops import unary_union
+import matplotlib.path as mpl_path
+import matplotlib.patches as mpl_patches
+import matplotlib.collections as mpl_coll
+from shapely.geometry import LineString, Polygon, Point
+from shapely.ops import unary_union, triangulate
+from shapely.affinity import affine_transform
 
 
 def point_between(point_1: np.array, point_2: np.array, k):
@@ -33,10 +36,40 @@ def no_ego_cone(point, u, theta, frame_box):
     return Polygon([point, p1, p3, p4, p2, point]).intersection(frame_box)
 
 
-def plot_polygon(ax, poly):
-    fill_patch = mpl_polygon(list(zip(*poly.exterior.xy)), facecolor='red', alpha=0.2)
-    ax.plot(*poly.exterior.xy, c="red", alpha=0.1)
-    ax.add_patch(fill_patch)
+# def plot_polygon(ax, poly):
+#     fill_patch = mpl_patches.Polygon(list(zip(*poly.exterior.xy)), facecolor='red', alpha=0.2)
+#     ax.plot(*poly.exterior.xy, c="red", alpha=0.1)
+#     ax.add_patch(fill_patch)
+
+
+def plot_polygon(ax, poly, **kwargs):
+    path = mpl_path.Path.make_compound_path(
+        mpl_path.Path(np.asarray(poly.exterior.coords)[:, :2]),
+        *[mpl_path.Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors])
+
+    patch = mpl_patches.PathPatch(path, **kwargs)
+    collection = mpl_coll.PatchCollection([patch], **kwargs)
+
+    ax.add_collection(collection, autolim=True)
+    ax.autoscale_view()
+    return collection
+
+
+def random_points_in_polygon(polygon, k):
+    # taken from :
+    # https://codereview.stackexchange.com/a/204289
+    areas = []
+    transforms = []
+    for t in triangulate(polygon):
+        areas.append(t.area)
+        (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
+        transforms.append([x1 - x0, x2 - x0, y2 - y0, y1 - y0, x0, y0])
+
+    print(transforms)
+    print(len(transforms))
+    points = []
+    for transform in np.random.choice(np.array(transforms), size=k, p=areas):
+        print(transform)
 
 
 def place_ego(instance_dict: dict):
@@ -75,8 +108,8 @@ def place_ego(instance_dict: dict):
     ax.scatter(midpoint[0], midpoint[1], marker="x", c="blue")
 
     # generate safety buffer area around agent's trajectory
-    d_agents = 40
-    too_close = LineString(np.concatenate((past, future), axis=0)).buffer(d_agents).convex_hull
+    r_agents = 60
+    too_close = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents).convex_hull
 
     # plot safety buffer
     # plot_polygon(ax, too_close)
@@ -95,9 +128,8 @@ def place_ego(instance_dict: dict):
     no_ego_border = Polygon(shell=frame_box, holes=border_box)
 
     # plot border box
-    # plot_polygon(ax, no_ego_border)
-    border_box_x, border_box_y = border_box.exterior.xy
-    ax.plot(border_box_x, border_box_y, color="black", alpha=0.3)
+    # border_box_x, border_box_y = border_box.exterior.xy
+    # ax.plot(border_box_x, border_box_y, color="black", alpha=0.3)
 
     # define no-ego regions based on taper angle, in order to prevent situations where agent is in direction of sight
     taper_angle = 60        # degrees
@@ -110,9 +142,20 @@ def place_ego(instance_dict: dict):
     # plot_polygon(ax, no_ego_1)
     # plot_polygon(ax, no_ego_2)
 
-    no_ego = unary_union((no_ego_1, no_ego_2, too_close))
+    nu = Polygon(frame_box.exterior.coords, [border_box.exterior.coords])
+    no_ego = unary_union((no_ego_1, no_ego_2, too_close, nu))
 
-    plot_polygon(ax, no_ego)
+    # plot_polygon(ax, nu)
+    # plot_polygon_2(ax, no_ego, facecolor="red", edgecolor="red", alpha=0.2)
+
+    # extract polygons within which to sample our ego position
+    yes_ego = [Polygon(hole) for hole in no_ego.interiors]
+
+    for zone in yes_ego:
+        print(zone)
+        plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
+
+        print(random_points_in_polygon(zone, 3))
 
     plt.show()
 
