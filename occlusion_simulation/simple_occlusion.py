@@ -1,12 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import shapely.ops
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
 import data.sdd_visualize as sdd_visualize
 import matplotlib.path as mpl_path
 import matplotlib.patches as mpl_patches
 import matplotlib.collections as mpl_coll
-from shapely.geometry import LineString, Polygon, Point
+from shapely.geometry import LineString, Polygon, Point, GeometryCollection
 from shapely.ops import unary_union, triangulate
 from shapely.affinity import affine_transform
 
@@ -55,26 +56,40 @@ def plot_polygon(ax, poly, **kwargs):
     return collection
 
 
+def polygon_triangulate(polygon):
+    # this approach solves the triangulation of non-convex polygons (with eventual interiors)
+    # create voronoi edges of polygon (bounded within the polygon itself)
+    voronoi_edges = shapely.ops.voronoi_diagram(polygon, edges=True).intersection(polygon)
+    # delaunay triangulation of every point (both from voronoi diagram and the polygon itself)
+    candidate_triangles = triangulate(GeometryCollection([voronoi_edges, polygon]))
+    # keep only triangles inside original polygon
+    return [triangle for triangle in candidate_triangles if triangle.centroid.within(polygon)]
+
+
+def random_point_in_triangle(triangle):
+    x = np.random.rand(2)
+    print(triangle)
+
+
 def random_points_in_polygon(polygon, k):
     # taken from :
     # https://codereview.stackexchange.com/a/204289
-    areas = []
-    transforms = []
-    for t in triangulate(polygon):
-        areas.append(t.area)
-        (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
-        transforms.append([x1 - x0, x2 - x0, y2 - y0, y1 - y0, x0, y0])
+
+    # TODO: https://stackoverflow.com/a/47418580
+
+    # WIP WIP WIP DEFINITELY NOT READY
+    triangles = polygon_triangulate(polygon)
+    areas = [tri.area for tri in triangles]
 
     print(areas)
-    print(transforms)
-    print(len(transforms))
+    # print(transforms)
+    # print(len(transforms))
     points = []
-    for transform_idx in np.random.choice(len(transforms), size=k, p=[float(i)/sum(areas) for i in areas]):
-        print(transform_idx)
-        # random point in unit triangle
-        tri_pos = np.random.random(2)
-        tri_pos = np.array([1, 1]) - tri_pos if sum(tri_pos) > 1 else tri_pos
-        points.append(affine_transform(Point(tri_pos), transforms[transform_idx]))
+
+    for rand_idx in np.random.choice(len(areas), size=k, p=[float(i) / sum(areas) for i in areas]):
+        print(rand_idx)
+        # do something here
+        print(random_point_in_triangle(polygon_triangulate(triangles[rand_idx])))
     return points
 
 
@@ -151,26 +166,49 @@ def place_ego(instance_dict: dict):
     nu = Polygon(frame_box.exterior.coords, [border_box.exterior.coords])
     no_ego = unary_union((no_ego_1, no_ego_2, too_close, nu))
 
-    # plot_polygon(ax, nu)
-    plot_polygon(ax, no_ego, facecolor="red", edgecolor="red", alpha=0.2)
+    # plot_polygon(ax, no_ego, facecolor="red", edgecolor="red", alpha=0.2)
 
     # extract polygons within which to sample our ego position
     yes_ego = [Polygon(hole) for hole in no_ego.interiors]
 
+    zone = yes_ego[0]
+    # add a hole to check.
+    # zone = Polygon(zone.exterior.coords, [Polygon([(1000, 250), (1300, 250), (1200, 400), (1000, 250)]).exterior.coords])
+    # plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
+
+    triangles = polygon_triangulate(zone)
+
+    print(triangles)
+    for poly in triangles:
+        plot_polygon(ax, poly, facecolor="green", edgecolor="green", alpha=0.2)
+
     for zone in yes_ego:
-        print(zone)
-        for t in triangulate(zone):
-            plot_polygon(ax, t, facecolor="blue", edgecolor="blue", alpha=0.2)
-        # plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
+        plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
 
-        print(random_points_in_polygon(zone, 3))
-        # ego_points = random_points_in_polygon(zone, 10000)
+        # print(random_points_in_polygon(zone, 3))
+        ego_points = random_points_in_polygon(zone, 100)
 
-        # xs = [point.x for point in ego_points]
-        # ys = [point.y for point in ego_points]
-        # ax.scatter(xs, ys)
+        xs = [point.x for point in ego_points]
+        ys = [point.y for point in ego_points]
+        ax.scatter(xs, ys)
 
     plt.show()
+
+    print("HEY HEY HEY \n\n\n")
+    hey_square = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+    hey_points = random_points_in_polygon(hey_square, 3)
+
+    fig, ax = plt.subplots()
+
+    for i in polygon_triangulate(hey_square):
+        plot_polygon(ax, i, edgecolor="red")
+
+    hyx = [point.x for point in hey_points]
+    hyy = [point.y for point in hey_points]
+    ax.scatter(hyx, hyy, color="red")
+
+    plt.show()
+
 
 
 if __name__ == '__main__':
