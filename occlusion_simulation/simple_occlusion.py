@@ -34,9 +34,8 @@ def no_ego_cone(point, u, theta, frame_box):
 
 
 def plot_polygon(ax, poly):
-    x, y = poly.exterior.xy
-    fill_patch = mpl_polygon(list(zip(x, y)), facecolor='red', alpha=0.2)
-    ax.plot(x, y, c="red", alpha=0.1)
+    fill_patch = mpl_polygon(list(zip(*poly.exterior.xy)), facecolor='red', alpha=0.2)
+    ax.plot(*poly.exterior.xy, c="red", alpha=0.1)
     ax.add_patch(fill_patch)
 
 
