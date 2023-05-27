@@ -65,11 +65,17 @@ def random_points_in_polygon(polygon, k):
         (x0, y0), (x1, y1), (x2, y2), _ = t.exterior.coords
         transforms.append([x1 - x0, x2 - x0, y2 - y0, y1 - y0, x0, y0])
 
+    print(areas)
     print(transforms)
     print(len(transforms))
     points = []
-    for transform in np.random.choice(np.array(transforms), size=k, p=areas):
-        print(transform)
+    for transform_idx in np.random.choice(len(transforms), size=k, p=[float(i)/sum(areas) for i in areas]):
+        print(transform_idx)
+        # random point in unit triangle
+        tri_pos = np.random.random(2)
+        tri_pos = np.array([1, 1]) - tri_pos if sum(tri_pos) > 1 else tri_pos
+        points.append(affine_transform(Point(tri_pos), transforms[transform_idx]))
+    return points
 
 
 def place_ego(instance_dict: dict):
@@ -146,16 +152,23 @@ def place_ego(instance_dict: dict):
     no_ego = unary_union((no_ego_1, no_ego_2, too_close, nu))
 
     # plot_polygon(ax, nu)
-    # plot_polygon_2(ax, no_ego, facecolor="red", edgecolor="red", alpha=0.2)
+    plot_polygon(ax, no_ego, facecolor="red", edgecolor="red", alpha=0.2)
 
     # extract polygons within which to sample our ego position
     yes_ego = [Polygon(hole) for hole in no_ego.interiors]
 
     for zone in yes_ego:
         print(zone)
-        plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
+        for t in triangulate(zone):
+            plot_polygon(ax, t, facecolor="blue", edgecolor="blue", alpha=0.2)
+        # plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
 
         print(random_points_in_polygon(zone, 3))
+        # ego_points = random_points_in_polygon(zone, 10000)
+
+        # xs = [point.x for point in ego_points]
+        # ys = [point.y for point in ego_points]
+        # ax.scatter(xs, ys)
 
     plt.show()
 
