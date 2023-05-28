@@ -67,29 +67,18 @@ def polygon_triangulate(polygon):
 
 
 def random_point_in_triangle(triangle):
-    x = np.random.rand(2)
-    print(triangle)
+    # inspired by https://stackoverflow.com/a/47418580
+    x = np.sort(np.random.rand(2))
+    np_triang = np.array([triangle.exterior.xy[0][:-1], triangle.exterior.xy[1][:-1]])
+    pt = np.array([x[0], x[1]-x[0], 1.0-x[1]])
+    return np_triang @ pt
 
 
-def random_points_in_polygon(polygon, k):
-    # taken from :
-    # https://codereview.stackexchange.com/a/204289
-
-    # TODO: https://stackoverflow.com/a/47418580
-
-    # WIP WIP WIP DEFINITELY NOT READY
-    triangles = polygon_triangulate(polygon)
+def random_points_in_triangles_collection(triangles, k):
     areas = [tri.area for tri in triangles]
-
-    print(areas)
-    # print(transforms)
-    # print(len(transforms))
     points = []
-
-    for rand_idx in np.random.choice(len(areas), size=k, p=[float(i) / sum(areas) for i in areas]):
-        print(rand_idx)
-        # do something here
-        print(random_point_in_triangle(polygon_triangulate(triangles[rand_idx])))
+    for rand_idx in np.random.choice(len(areas), size=k, p=[float(a) / sum(areas) for a in areas]):
+        points.append(random_point_in_triangle(triangles[rand_idx]))
     return points
 
 
@@ -178,37 +167,15 @@ def place_ego(instance_dict: dict):
 
     triangles = polygon_triangulate(zone)
 
-    print(triangles)
     for poly in triangles:
         plot_polygon(ax, poly, facecolor="green", edgecolor="green", alpha=0.2)
 
-    for zone in yes_ego:
-        plot_polygon(ax, zone, facecolor="blue", edgecolor="blue", alpha=0.2)
+    points = random_points_in_triangles_collection(triangles, k=1000)
 
-        # print(random_points_in_polygon(zone, 3))
-        ego_points = random_points_in_polygon(zone, 100)
-
-        xs = [point.x for point in ego_points]
-        ys = [point.y for point in ego_points]
-        ax.scatter(xs, ys)
+    for point in points:
+        ax.scatter(point[0], point[1])
 
     plt.show()
-
-    print("HEY HEY HEY \n\n\n")
-    hey_square = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-    hey_points = random_points_in_polygon(hey_square, 3)
-
-    fig, ax = plt.subplots()
-
-    for i in polygon_triangulate(hey_square):
-        plot_polygon(ax, i, edgecolor="red")
-
-    hyx = [point.x for point in hey_points]
-    hyy = [point.y for point in hey_points]
-    ax.scatter(hyx, hyy, color="red")
-
-    plt.show()
-
 
 
 if __name__ == '__main__':
