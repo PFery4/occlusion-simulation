@@ -1,3 +1,4 @@
+import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely.ops
@@ -7,43 +8,37 @@ import data.sdd_visualize as sdd_visualize
 import matplotlib.path as mpl_path
 import matplotlib.patches as mpl_patches
 import matplotlib.collections as mpl_coll
-from shapely.geometry import LineString, Polygon, Point, GeometryCollection
+from shapely.geometry import LineString, Polygon, GeometryCollection
 from shapely.ops import unary_union, triangulate
-from shapely.affinity import affine_transform
+from typing import List
 
 
-def point_between(point_1: np.array, point_2: np.array, k):
+def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
     # k between 0 and 1, point_1 and point_2 of same shape
     return k * point_1 + (1 - k) * point_2
 
 
-def rotation_matrix(theta):
+def rotation_matrix(theta: float) -> np.array:
     # angle in radians
     return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
 
-def no_ego_cone(point, u, theta, frame_box):
-    # generate the polygon corresponding to the intersection of:
-    # an infinite cone pointing towards unit_vec u and with a taper angle 2*theta, and with extremety located at point
-    # and the frame_box polygon
+def no_ego_cone(p: np.array, u: np.array, theta: float, frame_box: Polygon) -> Polygon:
+    """
+    generates the polygon corresponding to a section of the plane bounded by:
+    - two lines, intersecting at point p, such that their bisector points towards unit vector u. the angle of the lines
+    with respect to the bisector is equal to theta.
+    - frame_box, a polygon which contains point p.
+    """
     big_vec = -u * 2 * np.max(frame_box.bounds)        # large vector, to guarantee cone is equivalent to infinite
-
-    p1 = rotation_matrix(theta) @ big_vec + point
-    p2 = rotation_matrix(-theta) @ big_vec + point
-
+    p1 = rotation_matrix(theta) @ big_vec + p
+    p2 = rotation_matrix(-theta) @ big_vec + p
     p3 = p1 + big_vec
     p4 = p2 + big_vec
-
-    return Polygon([point, p1, p3, p4, p2, point]).intersection(frame_box)
-
-
-# def plot_polygon(ax, poly):
-#     fill_patch = mpl_patches.Polygon(list(zip(*poly.exterior.xy)), facecolor='red', alpha=0.2)
-#     ax.plot(*poly.exterior.xy, c="red", alpha=0.1)
-#     ax.add_patch(fill_patch)
+    return Polygon([p, p1, p3, p4, p2, p]).intersection(frame_box)
 
 
-def plot_polygon(ax, poly, **kwargs):
+def plot_polygon(ax: matplotlib.axes.Axes, poly: Polygon, **kwargs) -> None:
     path = mpl_path.Path.make_compound_path(
         mpl_path.Path(np.asarray(poly.exterior.coords)[:, :2]),
         *[mpl_path.Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors])
@@ -53,12 +48,14 @@ def plot_polygon(ax, poly, **kwargs):
 
     ax.add_collection(collection, autolim=True)
     ax.autoscale_view()
-    return collection
 
 
-def polygon_triangulate(polygon):
-    # this approach solves the triangulation of non-convex polygons (with eventual interiors)
-    # create voronoi edges of polygon (bounded within the polygon itself)
+def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
+    """
+    'Naïve' polygon triangulation of the input. The triangulate function from shapely.ops does not guarantee proper
+    triangulation of non-convex polygons with interior holes. This method permits this guarantee by performing
+    triangulation on the union of points belonging to the polygon, and the points of the polygon's voronoi diagram.
+    """
     voronoi_edges = shapely.ops.voronoi_diagram(polygon, edges=True).intersection(polygon)
     # delaunay triangulation of every point (both from voronoi diagram and the polygon itself)
     candidate_triangles = triangulate(GeometryCollection([voronoi_edges, polygon]))
@@ -66,24 +63,22 @@ def polygon_triangulate(polygon):
     return [triangle for triangle in candidate_triangles if triangle.centroid.within(polygon)]
 
 
-def random_point_in_triangle(triangle):
-    # inspired by https://stackoverflow.com/a/47418580
-    x = np.sort(np.random.rand(2))
-    np_triang = np.array([triangle.exterior.xy[0][:-1], triangle.exterior.xy[1][:-1]])
-    pt = np.array([x[0], x[1]-x[0], 1.0-x[1]])
-    return np_triang @ pt
+def random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
+    # inspired by: https://stackoverflow.com/a/47418580
+    x = np.sort(np.random.rand(2, k), axis=0)
+    return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
 
 
-def random_points_in_triangles_collection(triangles, k):
-    areas = [tri.area for tri in triangles]
-    points = []
-    for rand_idx in np.random.choice(len(areas), size=k, p=[float(a) / sum(areas) for a in areas]):
-        points.append(random_point_in_triangle(triangles[rand_idx]))
+def random_points_in_triangles_collection(triangles: List[Polygon], k: int) -> np.array:
+    proportions = np.array([tri.area for tri in triangles])
+    proportions /= sum(proportions)         # make a vector of probabilities
+    points = np.array(
+        [random_points_in_triangle(triangles[idx]) for idx in np.random.choice(len(triangles), size=k, p=proportions)]
+    ).reshape((k, 2))
     return points
 
 
 def place_ego(instance_dict: dict):
-
     agent_id = 12
     idx = instance_dict["agent_ids"].index(agent_id)
     past = instance_dict["pasts"][idx]
@@ -169,6 +164,8 @@ def place_ego(instance_dict: dict):
 
     for poly in triangles:
         plot_polygon(ax, poly, facecolor="green", edgecolor="green", alpha=0.2)
+
+    print(type(triangles))
 
     points = random_points_in_triangles_collection(triangles, k=1000)
 
