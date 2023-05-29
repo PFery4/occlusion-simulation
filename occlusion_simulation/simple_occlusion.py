@@ -1,17 +1,15 @@
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
-import shapely.ops
 import torch
-
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
 import data.sdd_visualize as sdd_visualize
 import matplotlib.path as mpl_path
 import matplotlib.patches as mpl_patches
 import matplotlib.collections as mpl_coll
-from shapely.geometry import LineString, Polygon, GeometryCollection
-from shapely.ops import unary_union, triangulate
+from shapely.geometry import LineString, Polygon, GeometryCollection, MultiPolygon
+from shapely.ops import unary_union, triangulate, voronoi_diagram
 from typing import List, Tuple
 
 
@@ -58,7 +56,7 @@ def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
     triangulation of non-convex polygons with interior holes. This method permits this guarantee by performing
     triangulation on the union of points belonging to the polygon, and the points of the polygon's voronoi diagram.
     """
-    voronoi_edges = shapely.ops.voronoi_diagram(polygon, edges=True).intersection(polygon)
+    voronoi_edges = voronoi_diagram(polygon, edges=True).intersection(polygon)
     # delaunay triangulation of every point (both from voronoi diagram and the polygon itself)
     candidate_triangles = triangulate(GeometryCollection([voronoi_edges, polygon]))
     # keep only triangles inside original polygon
@@ -71,11 +69,12 @@ def random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
     return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
 
 
-def random_points_in_triangles_collection(triangles: List[Polygon], k: int) -> np.array:
-    proportions = np.array([tri.area for tri in triangles])
+def random_points_in_triangles_collection(triangles: MultiPolygon, k: int) -> np.array:
+    proportions = np.array([tri.area for tri in triangles.geoms])
     proportions /= sum(proportions)         # make a vector of probabilities
     points = np.array(
-        [random_points_in_triangle(triangles[idx]) for idx in np.random.choice(len(triangles), size=k, p=proportions)]
+        [random_points_in_triangle(triangles.geoms[idx]) for idx in
+         np.random.choice(len(triangles.geoms), size=k, p=proportions)]
     ).reshape((k, 2))
     return points
 
@@ -126,14 +125,30 @@ def select_random_target_agents(instance_dict: dict, n: int = 1) -> List[int]:
     return list(np.random.choice(ids, n, replace=False, p=distances/sum(distances)))
 
 
-def place_ego(instance_dict: dict):
+def target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wedge_angle: float = 60) -> List[Polygon]:
+    # generate safety buffer area around agent's trajectory
+    target_buffer = LineString(fulltraj).buffer(radius).convex_hull
 
-    n_targets = 2       # [-]   number of desired target agents to occlude virtually
+    # define no-ego wedges based on taper angle, in order to prevent situations where ego
+    # is directly aligned with target agent's trajectory
+    u_traj = np.array(fulltraj[-1] - fulltraj[0])  # unit vector of agent's trajectory (future[-1], past[0])
+    u_traj /= np.linalg.norm(u_traj)
+    no_ego_1 = bounded_wedge((np.array(fulltraj[-1]) - u_traj * radius), -u_traj, float(np.radians(wedge_angle)),
+                             rectangle(instance_dict["image_tensor"]))
+    no_ego_2 = bounded_wedge((np.array(fulltraj[0]) + u_traj * radius), u_traj, float(np.radians(wedge_angle)),
+                             rectangle(instance_dict["image_tensor"]))
+
+    return [target_buffer, no_ego_1, no_ego_2]
+
+
+def place_ego(instance_dict: dict):
+    n_targets = 1       # [-]   number of desired target agents to occlude virtually
     d_border = 120      # [px]  distance from scene border
     min_obs = 2         # [-]   minimum amount of timesteps we want to have observed within observation window
     min_reobs = 2       # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
     r_agents = 60       # [px]  safety buffer around agents for placement of ego
     taper_angle = 60    # [deg] angle for the generation of wedges
+    n_egos = 10          # [-]   number of candidate positions to sample for the simulated ego
 
     target_agents = select_random_target_agents(instance_dict, n_targets)
 
@@ -144,69 +159,53 @@ def place_ego(instance_dict: dict):
     frame_box = extruded_polygon(rectangle(instance_dict["image_tensor"]), d_border)
 
     no_ego_zones = [frame_box]
-    for agent_id in target_agents:
+
+    for agent_id in instance_dict["agent_ids"]:
         idx = instance_dict["agent_ids"].index(agent_id)
         past = instance_dict["pasts"][idx]
         future = instance_dict["futures"][idx]
 
-        # pick random occlusion and disocclusion points lying on interpolated trajectory
-        p_occl = random_interpolated_point(past, (min_obs, past.shape[0]))
-        p_disoccl = random_interpolated_point(future, (0, future.shape[0]-min_reobs))
+        if agent_id in target_agents:
+            # pick random occlusion and disocclusion points lying on interpolated trajectory
+            p_occl = random_interpolated_point(past, (min_obs, past.shape[0]))
+            p_disoccl = random_interpolated_point(future, (0, future.shape[0] - min_reobs))
 
-        # plot occlusion points
-        ax.scatter(p_occl[0], p_occl[1], marker="x", c="yellow")
-        ax.scatter(p_disoccl[0], p_disoccl[1], marker="x", c="green")
+            # plot occlusion points
+            ax.scatter(p_occl[0], p_occl[1], marker="x", c="yellow")
+            ax.scatter(p_disoccl[0], p_disoccl[1], marker="x", c="green")
 
-        # generate safety buffer area around agent's trajectory
-        target_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents).convex_hull
+            no_ego_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), r_agents, taper_angle))
+        else:
+            other_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents)
+            no_ego_zones.append(other_buffer)
 
-        # define no-ego wedges based on taper angle, in order to prevent situations where ego
-        # is directly aligned with target agent's trajectory
-        u_traj = np.array(future[-1] - past[0])  # unit vector of agent's trajectory (future[-1], past[0])
-        u_traj /= np.linalg.norm(u_traj)
-        no_ego_1 = bounded_wedge(np.array(future[-1]), -u_traj, float(np.radians(taper_angle)),
-                                 rectangle(instance_dict["image_tensor"]))
-        no_ego_2 = bounded_wedge(np.array(past[0]), u_traj, float(np.radians(taper_angle)),
-                                 rectangle(instance_dict["image_tensor"]))
-
-        no_ego_zones.extend([target_buffer, no_ego_1, no_ego_2])
-
-    for agent_id in [ag for ag in instance_dict["agent_ids"] if ag not in target_agents]:
-        idx = instance_dict["agent_ids"].index(agent_id)
-        past = instance_dict["pasts"][idx]
-        future = instance_dict["futures"][idx]
-
-        other_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents)
-        no_ego_zones.append(other_buffer)
-
-    # plot no-ego regions
-    [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones]
+    no_ego_zones = MultiPolygon(no_ego_zones)
 
     # extract polygons within which to sample our ego position
-    yes_ego_zones = [Polygon(hole) for hole in unary_union(no_ego_zones).interiors]
+
+    yes_ego_zones = rectangle(instance_dict["image_tensor"]).difference(unary_union(no_ego_zones))
+    yes_ego_zones = MultiPolygon([yes_ego_zones]) if isinstance(yes_ego_zones, Polygon) else yes_ego_zones
 
     yes_triangles = []
-    for zone in yes_ego_zones:
+    for zone in yes_ego_zones.geoms:
         yes_triangles.extend(polygon_triangulate(zone))
+    yes_triangles = MultiPolygon(yes_triangles)
 
-    for poly in yes_triangles:
-        plot_polygon(ax, poly, facecolor="green", edgecolor="green", alpha=0.2)
+    # highlight regions generated for the selection of the ego
+    [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones.geoms]
+    [plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles.geoms]
 
-    ego_points = random_points_in_triangles_collection(yes_triangles, k=1)
+    ego_points = random_points_in_triangles_collection(yes_triangles, k=n_egos)
 
-    ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x", c="black")
+    ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x")
 
-    # # TODO
-    # # WIP: generation of virtual occluding wall
-    #
-    # for row_idx in range(ego_points.shape[0]):
-    #
-    #     wall_1 = point_between(ego_points[row_idx], np.array(p_occl), np.random.random())
-    #     wall_2 = point_between(ego_points[row_idx], np.array(p_disoccl), np.random.random())
-    #
-    #     ax.plot([wall_1[0], wall_2[0]], [wall_1[1], wall_2[1]], c="black")
+    for ego_point in ego_points:
+        print(ego_point)
+        # todo: stuff with the generation of virtual occluders
 
     plt.show()
+
+    return ego_points
 
 
 if __name__ == '__main__':
@@ -219,6 +218,9 @@ if __name__ == '__main__':
 
     instance_dict = dataset.__getitem__(instance_idx)
 
-    place_ego(instance_dict=instance_dict)
+    ego_points = place_ego(instance_dict=instance_dict)
+
+
+
 
 
