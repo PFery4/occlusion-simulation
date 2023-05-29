@@ -219,8 +219,3 @@ if __name__ == '__main__':
     instance_dict = dataset.__getitem__(instance_idx)
 
     ego_points = place_ego(instance_dict=instance_dict)
-
-
-
-
-
