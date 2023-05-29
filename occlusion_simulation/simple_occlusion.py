@@ -102,69 +102,91 @@ def extruded_polygon(polygon: Polygon, d_border: float) -> Polygon:
     return Polygon(shell=polygon.exterior.coords, holes=[hole.exterior.coords])
 
 
+def select_random_target_agents(instance_dict: dict, n: int = 1) -> List[int]:
+    """
+    selects a random subset of agents present within the scene. The probability to select any agent is proportional to
+    the distance they travel. n agents will be sampled (possibly fewer if there aren't enough agents)
+    """
+    # distances travelled by all agents in their past segment
+    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in instance_dict["pasts"]])
+    is_moving = (distances > 1e-8)
+
+    # keeping the agents which have travelled a nonzero distance in their past
+    ids = np.array(instance_dict["agent_ids"])[is_moving]
+    distances = distances[is_moving]
+
+    if ids.size == 0:
+        print("Zero moving agents, no target agent can be selected")
+        return []
+
+    if ids.size <= n:
+        print(f"returning all available candidates: only {ids.size} moving agents in the scene")
+        return list(ids)
+
+    return list(np.random.choice(ids, n, replace=False, p=distances/sum(distances)))
+
+
 def place_ego(instance_dict: dict):
-    agent_id = 12
-    idx = instance_dict["agent_ids"].index(agent_id)
-    past = instance_dict["pasts"][idx]
-    future = instance_dict["futures"][idx]
+
+    n_targets = 2       # [-]   number of desired target agents to occlude virtually
+    d_border = 120      # [px]  distance from scene border
+    min_obs = 2         # [-]   minimum amount of timesteps we want to have observed within observation window
+    min_reobs = 2       # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
+    r_agents = 60       # [px]  safety buffer around agents for placement of ego
+    taper_angle = 60    # [deg] angle for the generation of wedges
+
+    target_agents = select_random_target_agents(instance_dict, n_targets)
 
     fig, ax = plt.subplots()
     sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict)
 
-    min_obs = 2     # minimum amount of timesteps we want to have observed within observation window
-    min_reobs = 2   # minimum amount of timesteps we want to be able to reobserve after disocclusion
-
-
-    # pick random occlusion and disocclusion points lying on interpolated trajectory
-    p_occl = random_interpolated_point(past, (min_obs, past.shape[0]))
-    p_disoccl = random_interpolated_point(future, (0, future.shape[0]-min_reobs))
-
-    # plot occlusion points
-    ax.scatter(p_occl[0], p_occl[1], marker="x", c="yellow")
-    ax.scatter(p_disoccl[0], p_disoccl[1], marker="x", c="green")
-
-    # generate safety buffer area around agent's trajectory
-    r_agents = 60
-    target_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents).convex_hull
-
-    other_buffers = []
-    for other in range(len(instance_dict["agent_ids"])):
-        if instance_dict["agent_ids"][other] == agent_id:
-            continue
-        pst = instance_dict["pasts"][other]
-        ftr = instance_dict["futures"][other]
-        other_buffer = LineString(np.concatenate((pst, ftr), axis=0)).buffer(r_agents)
-        other_buffers.append(other_buffer)
-
     # set safety perimeter around the edges of the scene
-    d_border = 120     # pixel distance from scene border
     frame_box = extruded_polygon(rectangle(instance_dict["image_tensor"]), d_border)
 
-    # define no-ego regions based on taper angle, in order to prevent situations where agent is in direction of sight
-    taper_angle = 60        # degrees
-    u_traj = np.array(future[-1] - past[0])     # unit vector of agent's trajectory (future[-1], past[0])
-    u_traj /= np.linalg.norm(u_traj)
-    no_ego_1 = bounded_wedge(np.array(future[-1]), -u_traj, float(np.radians(taper_angle)), rectangle(instance_dict["image_tensor"]))
-    no_ego_2 = bounded_wedge(np.array(past[0]), u_traj, float(np.radians(taper_angle)), rectangle(instance_dict["image_tensor"]))
+    no_ego_zones = [frame_box]
+    for agent_id in target_agents:
+        idx = instance_dict["agent_ids"].index(agent_id)
+        past = instance_dict["pasts"][idx]
+        future = instance_dict["futures"][idx]
 
-    no_egos = [no_ego_1, no_ego_2, target_buffer, frame_box]
-    no_egos.extend(other_buffers)
+        # pick random occlusion and disocclusion points lying on interpolated trajectory
+        p_occl = random_interpolated_point(past, (min_obs, past.shape[0]))
+        p_disoccl = random_interpolated_point(future, (0, future.shape[0]-min_reobs))
 
-    no_ego = unary_union(no_egos)
+        # plot occlusion points
+        ax.scatter(p_occl[0], p_occl[1], marker="x", c="yellow")
+        ax.scatter(p_disoccl[0], p_disoccl[1], marker="x", c="green")
+
+        # generate safety buffer area around agent's trajectory
+        target_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents).convex_hull
+
+        # define no-ego wedges based on taper angle, in order to prevent situations where ego
+        # is directly aligned with target agent's trajectory
+        u_traj = np.array(future[-1] - past[0])  # unit vector of agent's trajectory (future[-1], past[0])
+        u_traj /= np.linalg.norm(u_traj)
+        no_ego_1 = bounded_wedge(np.array(future[-1]), -u_traj, float(np.radians(taper_angle)),
+                                 rectangle(instance_dict["image_tensor"]))
+        no_ego_2 = bounded_wedge(np.array(past[0]), u_traj, float(np.radians(taper_angle)),
+                                 rectangle(instance_dict["image_tensor"]))
+
+        no_ego_zones.extend([target_buffer, no_ego_1, no_ego_2])
+
+    for agent_id in [ag for ag in instance_dict["agent_ids"] if ag not in target_agents]:
+        idx = instance_dict["agent_ids"].index(agent_id)
+        past = instance_dict["pasts"][idx]
+        future = instance_dict["futures"][idx]
+
+        other_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents)
+        no_ego_zones.append(other_buffer)
 
     # plot no-ego regions
-    plot_polygon(ax, target_buffer, facecolor="red", alpha=0.2)
-    plot_polygon(ax, frame_box, facecolor="red", alpha=0.2)
-    plot_polygon(ax, no_ego_1, facecolor="red", alpha=0.2)
-    plot_polygon(ax, no_ego_2, facecolor="red", alpha=0.2)
-    [plot_polygon(ax, other_zone, facecolor="red", alpha=0.2) for other_zone in other_buffers]
+    [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones]
 
     # extract polygons within which to sample our ego position
-    yes_ego = [Polygon(hole) for hole in no_ego.interiors]
+    yes_ego_zones = [Polygon(hole) for hole in unary_union(no_ego_zones).interiors]
 
-    print(yes_ego)
     yes_triangles = []
-    for zone in yes_ego:
+    for zone in yes_ego_zones:
         yes_triangles.extend(polygon_triangulate(zone))
 
     for poly in yes_triangles:
@@ -174,15 +196,15 @@ def place_ego(instance_dict: dict):
 
     ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x", c="black")
 
-    # TODO
-    # WIP: generation of virtual occluding wall
-
-    for row_idx in range(ego_points.shape[0]):
-
-        wall_1 = point_between(ego_points[row_idx], np.array(p_occl), np.random.random())
-        wall_2 = point_between(ego_points[row_idx], np.array(p_disoccl), np.random.random())
-
-        ax.plot([wall_1[0], wall_2[0]], [wall_1[1], wall_2[1]], c="black")
+    # # TODO
+    # # WIP: generation of virtual occluding wall
+    #
+    # for row_idx in range(ego_points.shape[0]):
+    #
+    #     wall_1 = point_between(ego_points[row_idx], np.array(p_occl), np.random.random())
+    #     wall_2 = point_between(ego_points[row_idx], np.array(p_disoccl), np.random.random())
+    #
+    #     ax.plot([wall_1[0], wall_2[0]], [wall_1[1], wall_2[1]], c="black")
 
     plt.show()
 
