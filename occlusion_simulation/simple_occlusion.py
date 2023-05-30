@@ -1,6 +1,7 @@
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
+import skgeom.draw
 import torch
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
@@ -8,9 +9,12 @@ import data.sdd_visualize as sdd_visualize
 import matplotlib.path as mpl_path
 import matplotlib.patches as mpl_patches
 import matplotlib.collections as mpl_coll
-from shapely.geometry import LineString, Polygon, GeometryCollection, MultiPolygon
+from shapely.geometry import Point, LineString, Polygon, GeometryCollection, MultiPolygon
 from shapely.ops import unary_union, triangulate, voronoi_diagram
-from typing import List, Tuple
+from typing import List, Tuple, Union
+
+import skgeom as sg
+import functools
 
 
 def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
@@ -38,10 +42,32 @@ def bounded_wedge(p: np.array, u: np.array, theta: float, frame_box: Polygon) ->
     return Polygon([p, p1, p3, p4, p2, p]).intersection(frame_box)
 
 
+def skgeom_bounded_wedge(p: np.array, u: np.array, theta: float, frame_box: Polygon) -> Polygon:
+    # todo
+    pass
+
+
 def plot_polygon(ax: matplotlib.axes.Axes, poly: Polygon, **kwargs) -> None:
     path = mpl_path.Path.make_compound_path(
         mpl_path.Path(np.asarray(poly.exterior.coords)[:, :2]),
-        *[mpl_path.Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors])
+        *[mpl_path.Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors]
+    )
+
+    patch = mpl_patches.PathPatch(path, **kwargs)
+    collection = mpl_coll.PatchCollection([patch], **kwargs)
+
+    ax.add_collection(collection, autolim=True)
+    ax.autoscale_view()
+
+
+def skgeom_plot_polygon(ax: matplotlib.axes.Axes, poly: Union[sg.Polygon, sg.PolygonWithHoles], **kwargs) -> None:
+    if isinstance(poly, sg.Polygon):
+        path = mpl_path.Path(poly.coords)
+    elif isinstance(poly, sg.PolygonWithHoles):
+        path = mpl_path.Path.make_compound_path(
+            mpl_path.Path(poly.outer_boundary().coords),
+            *[mpl_path.Path(hole.coords) for hole in poly.holes]
+        )
 
     patch = mpl_patches.PathPatch(path, **kwargs)
     collection = mpl_coll.PatchCollection([patch], **kwargs)
@@ -63,10 +89,20 @@ def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
     return [triangle for triangle in candidate_triangles if triangle.centroid.within(polygon)]
 
 
+def skgeom_polygon_triangulate(polygon: Polygon) -> List[Polygon]:
+    # todo
+    pass
+
+
 def random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
     # inspired by: https://stackoverflow.com/a/47418580
     x = np.sort(np.random.rand(2, k), axis=0)
     return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
+
+
+def skgeom_random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
+    # todo
+    pass
 
 
 def random_points_in_triangles_collection(triangles: MultiPolygon, k: int) -> np.array:
@@ -96,9 +132,19 @@ def rectangle(image_tensor: torch.Tensor) -> Polygon:
     return Polygon([(0, 0), (x_img, 0), (x_img, y_img), (0, y_img), (0, 0)])
 
 
+def skgeom_rectangle(image_tensor: torch.Tensor):
+    y_img, x_img = image_tensor.shape[1:]
+    return sg.Polygon([[0, 0], [x_img, 0], [x_img, y_img], [0, y_img]])
+
+
 def extruded_polygon(polygon: Polygon, d_border: float) -> Polygon:
     hole = polygon.buffer(-d_border)
     return Polygon(shell=polygon.exterior.coords, holes=[hole.exterior.coords])
+
+
+def skgeom_extruded_polygon(polygon: sg.Polygon, d_border: float) -> sg.PolygonWithHoles:
+    skel = sg.skeleton.create_interior_straight_skeleton(polygon)
+    return functools.reduce(lambda a, b: sg.boolean_set.difference(a, b)[0], skel.offset_polygons(d_border), polygon)
 
 
 def select_random_target_agents(instance_dict: dict, n: int = 1) -> List[int]:
@@ -141,24 +187,34 @@ def target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wedge_angl
     return [target_buffer, no_ego_1, no_ego_2]
 
 
+def skgeom_target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wedge_angle: float = 60) -> List[sg.Polygon]:
+    # todo
+    pass
+
 def place_ego(instance_dict: dict):
     n_targets = 1       # [-]   number of desired target agents to occlude virtually
     d_border = 120      # [px]  distance from scene border
     min_obs = 2         # [-]   minimum amount of timesteps we want to have observed within observation window
     min_reobs = 2       # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
-    r_agents = 60       # [px]  safety buffer around agents for placement of ego
+    r_ego = 140         # [px]  safety buffer around agents for placement of ego
+    r_occluders = 60    # [px]
     taper_angle = 60    # [deg] angle for the generation of wedges
-    n_egos = 10          # [-]   number of candidate positions to sample for the simulated ego
+    n_egos = 1          # [-]   number of candidate positions to sample for the simulated ego
 
     target_agents = select_random_target_agents(instance_dict, n_targets)
 
-    fig, ax = plt.subplots()
+    fig, (ax, ax_sg) = plt.subplots(ncols=2)
     sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict)
+    sdd_visualize.visualize_training_instance(ax_sg, instance_dict=instance_dict)
 
     # set safety perimeter around the edges of the scene
     frame_box = extruded_polygon(rectangle(instance_dict["image_tensor"]), d_border)
+    frame_box_sg = skgeom_extruded_polygon(skgeom_rectangle(instance_dict["image_tensor"]), d_border)
 
     no_ego_zones = [frame_box]
+    no_occl_zones = []
+    no_ego_zones_sg = [frame_box_sg]
+    no_occl_zones_sg = []
 
     for agent_id in instance_dict["agent_ids"]:
         idx = instance_dict["agent_ids"].index(agent_id)
@@ -167,17 +223,21 @@ def place_ego(instance_dict: dict):
 
         if agent_id in target_agents:
             # pick random occlusion and disocclusion points lying on interpolated trajectory
-            p_occl = random_interpolated_point(past, (min_obs, past.shape[0]))
-            p_disoccl = random_interpolated_point(future, (0, future.shape[0] - min_reobs))
+            p_occl = np.array(random_interpolated_point(past, (min_obs, past.shape[0])))
+            p_disoccl = np.array(random_interpolated_point(future, (0, future.shape[0] - min_reobs)))
 
             # plot occlusion points
             ax.scatter(p_occl[0], p_occl[1], marker="x", c="yellow")
             ax.scatter(p_disoccl[0], p_disoccl[1], marker="x", c="green")
 
-            no_ego_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), r_agents, taper_angle))
+            no_ego_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), r_ego, taper_angle))
+
+            no_occl_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer(r_occluders))
         else:
-            other_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_agents)
+            other_buffer = LineString(np.concatenate((past, future), axis=0)).buffer(r_ego)
             no_ego_zones.append(other_buffer)
+
+            no_occl_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer(r_occluders))
 
     no_ego_zones = MultiPolygon(no_ego_zones)
 
@@ -191,17 +251,27 @@ def place_ego(instance_dict: dict):
         yes_triangles.extend(polygon_triangulate(zone))
     yes_triangles = MultiPolygon(yes_triangles)
 
-    # highlight regions generated for the selection of the ego
-    [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones.geoms]
-    [plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles.geoms]
-
     ego_points = random_points_in_triangles_collection(yes_triangles, k=n_egos)
 
     ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x")
 
     for ego_point in ego_points:
         print(ego_point)
+        no_occl_zones.append(Point(ego_point).buffer(r_occluders))
+
+        occl_line = np.array([ego_point, p_occl])
+        print(occl_line)
+        ax.plot(occl_line[:, 0], occl_line[:, 1])
         # todo: stuff with the generation of virtual occluders
+
+    no_occl_zones = MultiPolygon(no_occl_zones)
+
+    # highlight regions generated for the selection of the ego
+    [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones.geoms]
+    [plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles.geoms]
+    [plot_polygon(ax, area, facecolor="blue", edgecolor="blue", alpha=0.2) for area in no_occl_zones.geoms]
+
+    [skgeom_plot_polygon(ax_sg, area, facecolor="red", alpha=0.2) for area in no_ego_zones_sg]
 
     plt.show()
 

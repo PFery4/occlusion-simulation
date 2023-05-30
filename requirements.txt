@@ -7,3 +7,5 @@ conda install -c conda-forge opencv
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 conda install pandas
 conda install matplotlib
+conda install -c conda-forge shapely
+conda install scikit-geometry -c conda-forge
