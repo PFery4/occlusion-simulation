@@ -1,7 +1,7 @@
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
-import skgeom.draw
+import skgeom
 import torch
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
@@ -191,13 +191,41 @@ def skgeom_target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wed
     # todo
     pass
 
+
+def shapely_poly_2_skgeom_poly(poly: Polygon) -> sg.Polygon:
+    points = [sg.Point2(*coord) for coord in poly.exterior.coords[:-1]]
+    return sg.Polygon(points)
+
+
+
+def scene_visibility_polygon(image_tensor: torch.Tensor, obstacles: MultiPolygon):
+    # todo
+
+    print(sg.Segment2(sg.Point2(1, 1), sg.Point2(3, 4)))
+    print(shapely_poly_2_skgeom_poly(Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])))
+
+    # print(obstacles)
+
+    obstacles = [shapely_poly_2_skgeom_poly(poly) for poly in obstacles.geoms]
+
+    # print(obstacles)
+    segments = []
+    [segments.extend(obstacle.edges) for obstacle in obstacles]
+
+    for seg in segments:
+        print(seg)
+
+    # print(obstacles[0].edges)
+    # for edge in obstacles[0].edges:
+    #     print(edge)
+
 def place_ego(instance_dict: dict):
     n_targets = 1       # [-]   number of desired target agents to occlude virtually
     d_border = 120      # [px]  distance from scene border
     min_obs = 2         # [-]   minimum amount of timesteps we want to have observed within observation window
     min_reobs = 2       # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
     r_ego = 140         # [px]  safety buffer around agents for placement of ego
-    r_occluders = 60    # [px]
+    r_occluders = 10    # [px]
     taper_angle = 60    # [deg] angle for the generation of wedges
     n_egos = 1          # [-]   number of candidate positions to sample for the simulated ego
 
@@ -272,6 +300,8 @@ def place_ego(instance_dict: dict):
     [plot_polygon(ax, area, facecolor="blue", edgecolor="blue", alpha=0.2) for area in no_occl_zones.geoms]
 
     [skgeom_plot_polygon(ax_sg, area, facecolor="red", alpha=0.2) for area in no_ego_zones_sg]
+
+    scene_visibility_polygon(instance_dict["image_tensor"], no_occl_zones)
 
     plt.show()
 
