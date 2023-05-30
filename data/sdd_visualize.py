@@ -90,8 +90,8 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
     # set the x and y axes
-    # draw_ax.set_xlim((0, instance_dict["image_tensor"].shape[2]))
-    # draw_ax.set_ylim((instance_dict["image_tensor"].shape[1], 0))
+    draw_ax.set_xlim((0, instance_dict["image_tensor"].shape[2]))
+    draw_ax.set_ylim((instance_dict["image_tensor"].shape[1], 0))
 
     # first draw the reference image onto the axis
     draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
