@@ -1,7 +1,6 @@
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
-import skgeom
 import torch
 import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
@@ -15,6 +14,7 @@ from typing import List, Tuple, Union
 
 import skgeom as sg
 import functools
+from time import time
 
 
 def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
@@ -43,7 +43,7 @@ def bounded_wedge(p: np.array, u: np.array, theta: float, frame_box: Polygon) ->
 
 
 def skgeom_bounded_wedge(p: np.array, u: np.array, theta: float, frame_box: Polygon) -> Polygon:
-    # todo
+    # todo OR NOT TO DO
     pass
 
 
@@ -90,7 +90,7 @@ def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
 
 
 def skgeom_polygon_triangulate(polygon: Polygon) -> List[Polygon]:
-    # todo
+    # todo OR NOT TO DO
     pass
 
 
@@ -101,7 +101,7 @@ def random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
 
 
 def skgeom_random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
-    # todo
+    # todo OR NOT TO DO
     pass
 
 
@@ -188,36 +188,42 @@ def target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wedge_angl
 
 
 def skgeom_target_agent_no_ego_zones(fulltraj: np.array, radius: float = 60, wedge_angle: float = 60) -> List[sg.Polygon]:
-    # todo
+    # todo OR NOT TODO
     pass
 
 
 def shapely_poly_2_skgeom_poly(poly: Polygon) -> sg.Polygon:
-    points = [sg.Point2(*coord) for coord in poly.exterior.coords[:-1]]
-    return sg.Polygon(points)
+    return sg.Polygon([sg.Point2(*coord) for coord in poly.exterior.coords[:-1]])
 
 
+def skgeom_poly_2_shapely_poly(poly: sg.Polygon) -> Polygon:
+    return Polygon(poly.coords)
 
-def scene_visibility_polygon(image_tensor: torch.Tensor, obstacles: MultiPolygon):
-    # todo
 
-    print(sg.Segment2(sg.Point2(1, 1), sg.Point2(3, 4)))
-    print(shapely_poly_2_skgeom_poly(Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])))
-
-    # print(obstacles)
-
+def scene_visibility_polygon(ego_point: np.array, obstacles: MultiPolygon, boundary: Polygon):
     obstacles = [shapely_poly_2_skgeom_poly(poly) for poly in obstacles.geoms]
+    boundary = shapely_poly_2_skgeom_poly(boundary)
 
-    # print(obstacles)
     segments = []
     [segments.extend(obstacle.edges) for obstacle in obstacles]
+    segments.extend(boundary.edges)
+
+    arr = sg.arrangement.Arrangement()
 
     for seg in segments:
         print(seg)
+        arr.insert(seg)
 
-    # print(obstacles[0].edges)
-    # for edge in obstacles[0].edges:
-    #     print(edge)
+    visibility = sg.RotationalSweepVisibility(arr)
+    # visibility = sg.TriangularExpansionVisibility(arr)
+    origin = sg.Point2(*ego_point)
+    face = arr.find(origin)
+    vx = visibility.compute_visibility(origin, face)
+
+    # convert Arrangement to sg.Polygon
+    vx = sg.Polygon([pt.point() for pt in vx.vertices])
+    return vx
+
 
 def place_ego(instance_dict: dict):
     n_targets = 1       # [-]   number of desired target agents to occlude virtually
@@ -301,12 +307,37 @@ def place_ego(instance_dict: dict):
 
     [skgeom_plot_polygon(ax_sg, area, facecolor="red", alpha=0.2) for area in no_ego_zones_sg]
 
-    scene_visibility_polygon(instance_dict["image_tensor"], no_occl_zones)
+    vis = scene_visibility_polygon(np.array([600, 600]), no_occl_zones, rectangle(instance_dict["image_tensor"]))
+    skgeom_plot_polygon(ax_sg, vis, facecolor="blue", alpha=0.2)
 
     plt.show()
 
     return ego_points
 
+
+def time_polygon_generation(n_iterations: int = 1000000):
+    print(f"Checking polygon generation timing: {n_iterations} iterations\n")
+    before = time()
+    for i in range(n_iterations):
+        sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
+    print(f"skgeom polygon instantiation: {time() - before}")
+
+    before = time()
+    for i in range(n_iterations):
+        Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
+    print(f"shapely polygon instantiation: {time() - before}")
+
+    before = time()
+    polysg = sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
+    for i in range(n_iterations):
+        skgeom_poly_2_shapely_poly(polysg)
+    print(f"skgeom 2 shapely polygon conversion: {time() - before}")
+
+    before = time()
+    polysp = Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
+    for i in range(n_iterations):
+        shapely_poly_2_skgeom_poly(polysp)
+    print(f"shapely 2 skgeom polygon conversion: {time() - before}")
 
 if __name__ == '__main__':
     print("Ok, let's do this")
