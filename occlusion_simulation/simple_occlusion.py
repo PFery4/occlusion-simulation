@@ -199,9 +199,8 @@ def shapely_poly_2_skgeom_poly(poly: Polygon) -> Union[sg.Polygon, sg.PolygonWit
     return sg.Polygon([sg.Point2(*coord) for coord in poly.exterior.coords[:-1]])
 
 
-def skgeom_poly_2_shapely_poly(poly: Union[sg.Polygon, sg.PolygonWithHoles]) -> Polygon:
-    # TODO: ENABLE WORKING WITH POLY WITH HOLES
-    return Polygon(poly.coords)
+def skgeom_poly_2_shapely_poly(poly: sg.PolygonWithHoles) -> Polygon:
+    return Polygon(shell=poly.outer_boundary().coords, holes=[hole.coords for hole in poly.holes])
 
 
 def skgeom_approximate_circle(circ: sg.Circle2, n_segments: int = 100) -> sg.Polygon:
@@ -211,7 +210,8 @@ def skgeom_approximate_circle(circ: sg.Circle2, n_segments: int = 100) -> sg.Pol
     return sg.Polygon([sg.Point2(*coord) for coord in coords])
 
 
-def visibility_polygon(ego_point: np.array, segments):
+def visibility_polygon(ego_point: np.array, segments) -> sg.PolygonWithHoles:
+    # todo: move arrangement instantiation outside this function
     arr = sg.arrangement.Arrangement()
     [arr.insert(seg) for seg in segments]
 
@@ -223,7 +223,15 @@ def visibility_polygon(ego_point: np.array, segments):
 
     # convert Arrangement to sg.Polygon
     vx = sg.Polygon([pt.point() for pt in vx.vertices])
-    return vx
+    return sg.PolygonWithHoles(vx, [])
+
+
+def intersect_all_polygons(polys: List[sg.PolygonWithHoles]) -> List[sg.PolygonWithHoles]:
+    intersect = functools.reduce(
+        lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
+        [sg.PolygonSet(poly) for poly in polys]
+    )
+    return intersect.polygons
 
 
 def trajectory_2_segment2_list(traj: np.array) -> List[sg.Segment2]:
@@ -238,7 +246,7 @@ def trajectory_2_segment2_list(traj: np.array) -> List[sg.Segment2]:
 def place_ego(instance_dict: dict):
     n_targets = 1           # [-]   number of desired target agents to occlude virtually
     d_border = 200          # [px]  distance from scene border
-    min_obs = 2             # [-]   minimum amount of timesteps we want to have observed within observation window
+    min_obs = 4             # [-]   minimum amount of timesteps we want to have observed within observation window
     min_reobs = 2           # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
     d_min_occl_ag = 60      # [px]  minimum distance that any point of a virtual occluder may have wrt any agent
     d_min_occl_ego = 30     # [px]  minimum distance that any point of a virtual occluder may have wrt ego
@@ -255,16 +263,16 @@ def place_ego(instance_dict: dict):
     frame_box_sg = skgeom_extruded_polygon(scene_boundary_sg, d_border)
 
     no_ego_zones = [frame_box]
-    no_ego_zones_sg = [frame_box_sg]
-    no_occluder_zones = [frame_box]
-    no_occluder_zones_sg = [frame_box_sg]
+    # no_ego_zones_sg = [frame_box_sg]
+    no_occluder_zones = []
+    # no_occluder_zones_sg = [frame_box_sg]
 
     # agent_buffers = [shapely_poly_2_skgeom_poly(LineString(np.concatenate((past, future), axis=0)).buffer(r_occluders)) for past, future in zip(instance_dict["pasts"], instance_dict["futures"])]
     agent_buffers = [shapely_poly_2_skgeom_poly(LineString(future).buffer(r_agents)) for future in instance_dict["pasts"]]
     # agent_segments = [trajectory_2_Segment2_list(traj) for traj in instance_dict["pasts"]]
 
-    p_occls = []
-    p_disoccls = []
+    t_occls = []
+    t_disoccls = []
     target_agents_fully_observable_regions = []
 
     for idx, agent_id in enumerate(instance_dict["agent_ids"]):
@@ -278,11 +286,8 @@ def place_ego(instance_dict: dict):
             last_obs_timestep = np.random.randint(min_obs - 1, past.shape[0] - 1)
             first_reobs_timestep = np.random.randint(future.shape[0] - min_reobs + 1)
 
-            p_last_obs = past[last_obs_timestep]
-            p_first_reobs = future[first_reobs_timestep]
-
-            p_occls.append(p_last_obs)
-            p_disoccls.append(p_first_reobs)
+            t_occls.append(last_obs_timestep)
+            t_disoccls.append(first_reobs_timestep)
 
             # scene_segments = agent_buffers.copy()
             # scene_segments.pop(idx)
@@ -301,30 +306,37 @@ def place_ego(instance_dict: dict):
             [scene_segments.extend(poly.edges) for poly in other_buffers]
             # [scene_segments.extend(segments) for segments in other_segments]
 
-            traj_fully_observable = functools.reduce(
-                lambda poly_1, poly_2: sg.boolean_set.intersect(poly_1, poly_2)[0],
-                [visibility_polygon(point, scene_segments) for point in np.concatenate([past, future], axis=0)[1:-1]]
+            # traj_fully_observable = functools.reduce(
+            #     lambda poly_1, poly_2: sg.boolean_set.intersect(poly_1, poly_2)[0],
+            #     [visibility_polygon(point, scene_segments) for point in np.concatenate([past, future], axis=0)]
+            # )
+            traj_fully_observable = intersect_all_polygons(
+                [visibility_polygon(point, scene_segments) for point in np.concatenate([past, future], axis=0)]
             )
 
             target_agents_fully_observable_regions.append(traj_fully_observable)
 
-            no_ego_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), (d_min_occl_ego + d_min_occl_ag), taper_angle))
-            no_occluder_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), d_min_occl_ag, taper_angle))
+            no_ego_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), (d_min_occl_ego + d_min_occl_ag) * 1.1, taper_angle))
+            # no_occluder_zones.extend(target_agent_no_ego_zones(np.concatenate((past, future), axis=0), d_min_occl_ag, taper_angle))
+            no_occluder_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer(d_min_occl_ag).convex_hull)
 
         else:
-            no_ego_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer((d_min_occl_ego + d_min_occl_ag)))
+            no_ego_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer((d_min_occl_ego + d_min_occl_ag) * 1.1))
             no_occluder_zones.append(LineString(np.concatenate((past, future), axis=0)).buffer(d_min_occl_ag))
 
-
     no_ego_zones = MultiPolygon(no_ego_zones)
-    no_occluder_zones = MultiPolygon(no_occluder_zones)
+
+    # target_agents_fully_observable_regions = functools.reduce(lambda poly1, poly2: sg.boolean_set.intersect(poly1, poly2)[0])
+    target_agents_fully_observable_regions = functools.reduce(
+        lambda poly_list_1, poly_list_2: sg.PolygonSet(poly_list_1).intersection(sg.PolygonSet(poly_list_2)),
+        target_agents_fully_observable_regions
+    )
+    target_agents_fully_observable_regions = target_agents_fully_observable_regions.polygons if isinstance(target_agents_fully_observable_regions, sg.PolygonSet) else target_agents_fully_observable_regions
 
     # extract polygons within which to sample our ego position
     yes_ego_zones = rectangle(instance_dict["image_tensor"]).difference(unary_union(no_ego_zones))
+    yes_ego_zones = yes_ego_zones.intersection(skgeom_poly_2_shapely_poly(target_agents_fully_observable_regions[0]))
     yes_ego_zones = MultiPolygon([yes_ego_zones]) if isinstance(yes_ego_zones, Polygon) else yes_ego_zones
-
-    # TODO: PROPER INTERSECTION OF YES_EGO_ZONES AND VISIBLE REGION (I.E., GREEN AND BLUE)
-    # yes_ego_zones = yes_ego_zones.intersection(skgeom_poly_2_shapely_poly(target_agents_fully_observable_regions[0]))
 
     yes_triangles = []
     [yes_triangles.extend(polygon_triangulate(zone)) for zone in yes_ego_zones.geoms]
@@ -332,22 +344,79 @@ def place_ego(instance_dict: dict):
 
     ego_points = random_points_in_triangles_collection(yes_triangles, k=n_egos)
 
+    # TODO: move this down once done with generation of walls
     # visualization part
     fig, ax = plt.subplots()
     sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict)
+
+
+
+    # COMPUTE OCCLUDERS
+    for ego_point in ego_points:
+
+        # draw circle around the ego_point
+        ego_buffer = Point(*ego_point).buffer(d_min_occl_ego)
+
+        no_occluder_zones.append(ego_buffer)
+
+        # ITERATE OVER TARGET AGENTS
+        for agent_id, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
+            past_traj = instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)]
+            future_traj = instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)]
+
+            # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
+            occluder_region = Polygon([ego_point, past_traj[t_occl], past_traj[t_occl + 1]])
+
+            # extrude no_occluder_regions from th triangle
+            for no_occl_zone in no_occluder_zones:
+                occluder_region = occluder_region.difference(no_occl_zone)
+            occluder_region = MultiPolygon([occluder_region]) if isinstance(occluder_region, Polygon) else occluder_region
+
+            # triangulate the resulting region
+            occluder_triangles = []
+            [occluder_triangles.extend(polygon_triangulate(poly)) for poly in occluder_region.geoms]
+            occluder_triangles = MultiPolygon(occluder_triangles)
+
+            # sample our first occluder wall coordinate from the region
+            [p_wall_1] = random_points_in_triangles_collection(occluder_triangles, k=1)
+
+            # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
+            # the point with a straight line
+            no_occluder_zones_sg = [shapely_poly_2_skgeom_poly(zone) for zone in no_occluder_zones]
+            segs = []
+            segs.extend(scene_boundary_sg.edges)
+            [segs.extend(poly.edges) for poly in no_occluder_zones_sg]
+            access_poly = visibility_polygon(p_wall_1, segments=segs)
+            access_poly = skgeom_poly_2_shapely_poly(access_poly)
+
+            # TODO: FROM HERE ON OUT: FIND THE OTHER WALL POINT BY INTERSECTING access_poly WITH A TRIANGLE BETWEEN EGO AND DISOCCL SEGMENT
+
+            plot_polygon(ax, access_poly, facecolor="yellow", edgecolor="yellow", alpha=0.2)
+            ax.scatter(*p_wall_1, marker="x", c="Purple")
+            [plot_polygon(ax, zone, facecolor="pink", alpha=0.4) for zone in occluder_region.geoms]
+
+    no_occluder_zones = MultiPolygon(no_occluder_zones)
+
+
+
 
     # plot agent buffers
     [skgeom_plot_polygon(ax, poly, edgecolor="blue", facecolor="blue", alpha=0.2) for poly in agent_buffers]
 
     # plot chosen occlusion points
-    [ax.scatter(point[0], point[1], marker="x", c="Yellow") for point in p_occls]
-    [ax.scatter(point[0], point[1], marker="x", c="Yellow") for point in p_disoccls]
+    [ax.scatter(
+        *instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)][t_occl], marker="x", c="Yellow"
+    ) for agent_id, t_occl in zip(target_agents, t_occls)]
+    [ax.scatter(
+        *instance_dict["futures"][instance_dict["agent_ids"].index(agent_id)][t_disoccl], marker="x", c="Yellow"
+    ) for agent_id, t_disoccl in zip(target_agents, t_disoccls)]
 
     # plot the fully observable regions
     [skgeom_plot_polygon(ax, poly, facecolor="blue", edgecolor="blue", alpha=0.2) for poly in target_agents_fully_observable_regions]
 
     # highlight regions generated for the selection of the ego
     [plot_polygon(ax, area, facecolor="red", alpha=0.2) for area in no_ego_zones.geoms]
+    [plot_polygon(ax, area, facecolor="orange", alpha=0.2) for area in no_occluder_zones.geoms]
     [plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles.geoms]
 
     # plot the ego
