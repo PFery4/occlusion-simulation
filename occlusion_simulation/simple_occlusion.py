@@ -85,20 +85,33 @@ def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
     return [triangle for triangle in candidate_triangles if triangle.centroid.within(polygon)]
 
 
-def random_points_in_triangle(triangle: Polygon, k: int = 1) -> np.array:
+def random_points_in_triangle(triangle: sg.Polygon, k: int = 1) -> np.array:
     # inspired by: https://stackoverflow.com/a/47418580
     x = np.sort(np.random.rand(2, k), axis=0)
-    return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
+
+    # print(np.array(triangle.exterior.xy)[:, :-1])
+    # triangle = shapely_poly_2_skgeom_poly(triangle)
+    # print(triangle.coords.transpose())
+
+    # return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
+    return triangle.coords.transpose() @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
 
 
-def random_points_in_triangles_collection(triangles: MultiPolygon, k: int) -> np.array:
-    proportions = np.array([tri.area for tri in triangles.geoms])
+def random_points_in_triangles_collection(triangles: List[sg.Polygon], k: int) -> np.array:
+    proportions = np.array([float(tri.area()) for tri in triangles])
     proportions /= sum(proportions)         # make a vector of probabilities
+    triangles = [skgeom_poly_2_shapely_poly(sg.PolygonWithHoles(tri, [])) for tri in triangles]
     points = np.array(
-        [random_points_in_triangle(triangles.geoms[idx]) for idx in
-         np.random.choice(len(triangles.geoms), size=k, p=proportions)]
+        [random_points_in_triangle(triangles[idx]) for idx in
+         np.random.choice(len(triangles), size=k, p=proportions)]
     ).reshape((k, 2))
     return points
+
+
+def sample_triangles(triangles: List[sg.Polygon], k: int = 1) -> List[sg.Polygon]:
+    proportions = np.array([float(tri.area()) for tri in triangles])
+    proportions /= sum(proportions)         # make a vector of probabilities
+    return [triangles[idx] for idx in np.random.choice(len(triangles), size=k, p=proportions)]
 
 
 # def random_interpolated_point(traj_seq: np.array, timestep_bounds: Tuple[int, int]):
@@ -328,51 +341,54 @@ def place_ego(instance_dict: dict):
     )
 
     # the regions within which we sample our ego are the regions within which target agents' full trajectories are
-    # observavle, minus the boundaries and no_ego_zones we set previously
+    # observable, minus the boundaries and no_ego_zones we set previously
     yes_ego_zones = target_agents_fully_observable_regions.difference(no_ego_zones).difference(frame_box)
-
-    # # extract polygons within which to sample our ego position
-    # yes_ego_zones = rectangle(instance_dict["image_tensor"]).difference(unary_union(no_ego_zones))
-    # yes_ego_zones = yes_ego_zones.intersection(skgeom_poly_2_shapely_poly(target_agents_fully_observable_regions[0]))
-    # yes_ego_zones = MultiPolygon([yes_ego_zones]) if isinstance(yes_ego_zones, Polygon) else yes_ego_zones
-
 
     # to sample from yes_ego_zones, we will need to triangulate the regions in yes_ego_zones
     # this can't be done in scikit-geometry, so we're doing it with shapely instead -> todo: maybe possible? try later
     yes_triangles = []
     [yes_triangles.extend(polygon_triangulate(skgeom_poly_2_shapely_poly(zone))) for zone in yes_ego_zones.polygons]
-    yes_triangles = MultiPolygon(yes_triangles)     # todo: this should not be a multipolygon, but a sg.PolygonSet
+    yes_triangles = [shapely_poly_2_skgeom_poly(triangle) for triangle in yes_triangles]
 
-    # TODO: CONTINUE CODE CLEANUP FROM HERE
-    # ego_points = random_points_in_triangles_collection(yes_triangles, k=n_egos)
-    #
+    # sample points from yes_triangles
+    ego_points = np.array(
+        [random_points_in_triangle(triangle, k=1) for triangle in sample_triangles(yes_triangles, k=n_egos)]
+    ).reshape((n_egos, 2))
+
     # TODO: move this down once done with generation of walls
     # visualization part
     fig, ax = plt.subplots()
     sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict)
-    #
-    #
-    #
-    # # COMPUTE OCCLUDERS
-    # for ego_point in ego_points:
-    #
-    #     # draw circle around the ego_point
-    #     ego_buffer = Point(*ego_point).buffer(d_min_occl_ego)
-    #
-    #     no_occluder_zones.append(ego_buffer)
-    #
-    #     # ITERATE OVER TARGET AGENTS
-    #     for agent_id, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
-    #         past_traj = instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)]
-    #         future_traj = instance_dict["futures"][instance_dict["agent_ids"].index(agent_id)]
-    #
-    #         # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
-    #         occluder_region = Polygon([ego_point, past_traj[t_occl], past_traj[t_occl + 1]])
-    #
-    #         # extrude no_occluder_regions from th triangle
-    #         for no_occl_zone in no_occluder_zones:
-    #             occluder_region = occluder_region.difference(no_occl_zone)
-    #         occluder_region = MultiPolygon([occluder_region]) if isinstance(occluder_region, Polygon) else occluder_region
+
+    # COMPUTE OCCLUDERS
+    for ego_point in ego_points:
+
+        # draw circle around the ego_point
+        ego_buffer = shapely_poly_2_skgeom_poly(Point(*ego_point).buffer(d_min_occl_ego))
+
+        no_zones = no_occluder_zones.copy()
+        no_zones.append(ego_buffer)
+
+        # ITERATE OVER TARGET AGENTS
+        for agent_id, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
+            # todo: do this better, this should be handled better
+            # ideally we should also iterate over the pasts and futures too.
+            past_traj = instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)]
+            future_traj = instance_dict["futures"][instance_dict["agent_ids"].index(agent_id)]
+
+            # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
+            occluder_region = sg.Polygon(np.array([ego_point, np.array(past_traj[t_occl]), np.array(past_traj[t_occl + 1])]))
+
+            print(occluder_region)
+
+            occluder_region = sg.PolygonSet(occluder_region).difference(sg.PolygonSet(no_zones))        # todo: fix orientation bug
+
+            # todo: CONTINUE HERE CODE CLEANUP
+
+    #         # # extrude no_occluder_regions from the triangle
+    #         # for no_occl_zone in no_occluder_zones:
+    #         #     occluder_region = occluder_region.difference(no_occl_zone)
+    #         # occluder_region = MultiPolygon([occluder_region]) if isinstance(occluder_region, Polygon) else occluder_region
     #
     #         # triangulate the resulting region
     #         occluder_triangles = []
@@ -432,10 +448,10 @@ def place_ego(instance_dict: dict):
     [skgeom_plot_polygon(ax, poly, facecolor="red", alpha=0.2) for poly in no_ego_zones.polygons]
     # [skgeom_plot_polygon(ax, poly, facecolor="green", alpha=0.2) for poly in yes_ego_zones.polygons]
     # [plot_polygon(ax, area, facecolor="orange", alpha=0.2) for area in no_occluder_zones.geoms]
-    [plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles.geoms]
-    #
-    # # plot the ego
-    # ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x", c="Red")
+    [skgeom_plot_polygon(ax, area, facecolor="green", edgecolor="green", alpha=0.2) for area in yes_triangles]
+
+    # plot the ego
+    ax.scatter(ego_points[:, 0], ego_points[:, 1], marker="x", c="Red")
 
     plt.show()
 
