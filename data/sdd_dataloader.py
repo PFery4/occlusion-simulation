@@ -5,14 +5,17 @@ import numpy as np
 import cv2
 import torchvision.transforms
 import torch
-import matplotlib.pyplot as plt
 import pickle
 import json
 import uuid
-import time
 import data.sdd_extract as sdd_extract
 import data.sdd_data_processing as sdd_data_processing
-import data.sdd_visualize as sdd_visualize
+
+
+class StanfordDroneAgent:
+
+    def __init__(self):
+        pass
 
 
 class StanfordDroneDataset(Dataset):
@@ -73,7 +76,7 @@ class StanfordDroneDataset(Dataset):
 
                         # some timesteps are inexistant in the dataframe, due to the absence of any annotations at those
                         # points in time. we check that we can have a complete window.
-                        # (note that a complete window means we have at least one observation present for each timestep,
+                        # (note that while a complete window means we have at least one observation for each timestep,
                         # some agents might not have all their timesteps observed)
                         window_is_complete = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
 
@@ -240,33 +243,47 @@ class StanfordDroneDataset(Dataset):
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    import time
+    import data.sdd_visualize as sdd_visualize
 
     config = sdd_extract.get_config()
 
     dataset = StanfordDroneDataset(config_dict=config)
     print(f"{len(dataset)=}")
 
-    n_rows = 2
-    n_cols = n_rows
+    ##################################################################################################################
+    # n_rows = 2
+    # n_cols = n_rows
+    #
+    # fig, axes = plt.subplots(n_rows, n_cols)
+    # fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
+    #
+    # idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
+    #
+    # print(idx_samples)
+    # for ax_k, idx in enumerate(idx_samples):
+    #
+    #     ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
+    #
+    #     before = time.time()
+    #     instance_dict = dataset.__getitem__(idx)
+    #     after = time.time()
+    #     print(f"getitem({idx}) took {after - before} seconds")
+    #
+    #     axes[ax_x, ax_y].title.set_text(idx)
+    #     sdd_visualize.visualize_training_instance(
+    #         draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
+    #     )
+    #
+    # plt.show()
+    ##################################################################################################################
 
-    fig, axes = plt.subplots(n_rows, n_cols)
-    fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
+    print(dataset.frames.columns)
 
-    idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
+    idx = np.random.randint(0, len(dataset))
+    print(idx)
 
-    print(idx_samples)
-    for ax_k, idx in enumerate(idx_samples):
+    out = dataset.__getitem__(idx)
 
-        ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
-
-        before = time.time()
-        instance_dict = dataset.__getitem__(idx)
-        after = time.time()
-        print(f"getitem({idx}) took {after - before} seconds")
-
-        axes[ax_x, ax_y].title.set_text(idx)
-        sdd_visualize.visualize_training_instance(
-            draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
-        )
-
-    plt.show()
+    print(out)
