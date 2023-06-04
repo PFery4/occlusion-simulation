@@ -14,8 +14,20 @@ import data.sdd_data_processing as sdd_data_processing
 
 class StanfordDroneAgent:
 
-    def __init__(self):
-        pass
+    def __init__(self, agent_df: pd.DataFrame):
+        self.id = agent_df["Id"].unique().item()
+        self.label = agent_df.iloc[0].loc["label"]
+        self.timesteps = agent_df["frame"].to_numpy()
+
+        self.fulltraj = np.empty((len(self.timesteps), 2))
+        self.fulltraj.fill(np.nan)
+        self.fulltraj[:, 0] = agent_df["x"].values.flatten()
+        self.fulltraj[:, 1] = agent_df["y"].values.flatten()
+
+        assert not np.isnan(self.fulltraj).any()
+
+    def get_traj_section(self, time_window: np.array):
+        return self.fulltraj[np.in1d(self.timesteps, time_window), :]
 
 
 class StanfordDroneDataset(Dataset):
@@ -33,7 +45,7 @@ class StanfordDroneDataset(Dataset):
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
         found_path = self.find_pickle(config_dict["dataset"]["pickle_path"])
-        if found_path:
+        if found_path and False:        # todo: remove 'and False' once you're done modifying the dataloader
             print(f"Loading dataloader from:\n{found_path}")
             self.frames, self.lookuptable = self.load_data(found_path)
         else:
@@ -41,16 +53,16 @@ class StanfordDroneDataset(Dataset):
             # the lookuptable is a dataframe separate from the dataframe containing all trajectory data.
             # each row fully describes a complete training instance,
             # with its corresponding video/scene name, and timestep.
-            self.lookuptable = pd.DataFrame(columns=["scene/video", "timestep", "full_obs", "present"])
+            self.lookuptable = pd.DataFrame(columns=["scene", "video", "timestep", "full_obs", "present"])
 
             frames = []
-            scene_keys = []
+            # scene_keys = []
 
             # read the csv's for all videos
             # hopefully it is manageable within memory
             for scene_name in os.scandir(os.path.join(self.root, "annotations")):
                 for video_name in os.scandir(os.path.realpath(scene_name)):
-                    scene_key = f"{scene_name.name}/{video_name.name}"
+                    # scene_key = f"{scene_name.name}/{video_name.name}"
                     annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
                     print(f"Processing: {annot_file_path}")
                     assert os.path.exists(annot_file_path)
@@ -94,18 +106,29 @@ class StanfordDroneDataset(Dataset):
 
                             if len(fully_observed_agents) >= self.min_n:
                                 self.lookuptable.loc[len(self.lookuptable)] = {
-                                    "scene/video": scene_key,
+                                    "scene": scene_name.name,
+                                    "video": video_name.name,
                                     "timestep": timestep,
                                     "full_obs": fully_observed_agents,
                                     "present": present_agents
                                 }
 
+                    annot_df.insert(0, "scene", scene_name.name, False)
+                    annot_df.insert(1, "video", video_name.name, False)
+
                     frames.append(annot_df)
-                    scene_keys.append(scene_key)
+                    # scene_keys.append(scene_key)
 
-            self.frames = pd.concat(frames, keys=scene_keys)
+            self.lookuptable.set_index(["scene", "video"], inplace=True)
+            self.lookuptable.sort_index(inplace=True)
+            self.frames = pd.concat(frames)
+            self.frames.set_index(["scene", "video"], inplace=True)
+            self.frames.sort_index(inplace=True)
 
-            self.save_data(config_dict["dataset"]["pickle_path"])
+            print(self.lookuptable)
+            print(self.frames)
+
+            # self.save_data(config_dict["dataset"]["pickle_path"])
 
     def __len__(self):
         return len(self.lookuptable)
@@ -113,9 +136,9 @@ class StanfordDroneDataset(Dataset):
     def __getitem__(self, idx):
         # lookup the row in self.lookuptable
         lookup = self.lookuptable.iloc[idx]
+        scene, video = lookup.name
 
         # extract the reference image
-        scene, video = lookup["scene/video"].split("/", 1)
         image_path = os.path.join(self.root, "annotations", scene, video, "reference.jpg")
         assert os.path.exists(image_path)
         image = cv2.imread(image_path)
@@ -125,7 +148,12 @@ class StanfordDroneDataset(Dataset):
         # generate a window of the timesteps we are interested in extracting from the scene dataset
         window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + lookup["timestep"]
         # generate subdataframe of the scene with only the timesteps present within the window
-        mini_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
+        # mini_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
+        scenevideo_df = self.frames.loc[(scene, video)]
+        mini_df = self.frames.loc[(scene, video)][self.frames.loc[(scene, video)]["frame"].isin(window)]
+        # print(mini_df)
+        # print(type(mini_df))
+        # print(len(mini_df))
 
         # extract the trajectories of fully observed agents
         agent_ids = []
@@ -135,22 +163,31 @@ class StanfordDroneDataset(Dataset):
         is_fully_observed = []
 
         for agent_id in lookup["full_obs"]:
+            agent_obj = StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id])
+
             # label of the agent of interest
-            label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
+            # label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
+            # print(f"{agent_id=}, {agent_obj.id=}")
+            # print(f"{label=}, {agent_obj.label=}")
+            # print(f"{lookup['timestep']=}, {window=}, {agent_obj.timesteps=}")
+            # print(f"{agent_obj.fulltraj=}")
 
-            # empty sequence
-            sequence = np.empty((self.T_obs + self.T_pred, 2))
-            sequence.fill(np.nan)
+            # # empty sequence
+            # sequence = np.empty((self.T_obs + self.T_pred, 2))
+            # sequence.fill(np.nan)
+            #
+            # sequence[:, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
+            # sequence[:, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
+            #
+            # assert not np.isnan(sequence).any()
 
-            sequence[:, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
-            sequence[:, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
-
-            assert not np.isnan(sequence).any()
-
-            agent_ids.append(agent_id)
-            labels.append(label)
-            pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
-            futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+            agent_ids.append(agent_obj.id)
+            labels.append(agent_obj.label)
+            # pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
+            # futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
+            # is_fully_observed.append(True)
+            pasts.append(torch.from_numpy(agent_obj.get_traj_section(time_window=window[:self.T_obs])))
+            futures.append(torch.from_numpy(agent_obj.get_traj_section(time_window=window[self.T_obs:])))
             is_fully_observed.append(True)
 
         # # extract the trajectories of partially observed agents
@@ -177,7 +214,8 @@ class StanfordDroneDataset(Dataset):
         #     is_fully_observed.append(False)
 
         instance_dict = {
-            "scene_key": lookup["scene/video"],
+            "scene": scene,
+            "video": video,
             "timestep": lookup["timestep"],
             "agent_ids": agent_ids,
             "pasts": pasts,
@@ -281,9 +319,11 @@ if __name__ == '__main__':
 
     print(dataset.frames.columns)
 
-    idx = np.random.randint(0, len(dataset))
-    print(idx)
+    indices = [np.random.randint(0, len(dataset))]
+    indices = [33640, 33641, 33642, 33643, 33644, 33645]
+    print(f"{indices=}")
 
-    out = dataset.__getitem__(idx)
-
-    print(out)
+    [print(dataset.__getitem__(idx)["scene"]) for idx in indices]
+    [print(dataset.__getitem__(idx)["video"]) for idx in indices]
+    [print(dataset.__getitem__(idx)["agent_ids"]) for idx in indices]
+    [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
