@@ -156,28 +156,30 @@ def skgeom_extruded_polygon(polygon: sg.Polygon, d_border: float) -> sg.PolygonW
     return functools.reduce(lambda a, b: sg.boolean_set.difference(a, b)[0], skel.offset_polygons(d_border), polygon)
 
 
-def select_random_target_agents(instance_dict: dict, n: int = 1) -> List[int]:
+def select_random_target_agents(agent_list: List[sdd_dataloader.StanfordDroneAgent], past_window: np.array, n: int = 1)\
+        -> List[sdd_dataloader.StanfordDroneAgent]:
     """
     selects a random subset of agents present within the scene. The probability to select any agent is proportional to
     the distance they travel. n agents will be sampled (possibly fewer if there aren't enough agents)
     """
     # distances travelled by all agents in their past segment
-    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in instance_dict["pasts"]])
+    pasttrajs = [agent.get_traj_section(past_window) for agent in agent_list]
+    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in pasttrajs])
     is_moving = (distances > 1e-8)
 
     # keeping the agents which have travelled a nonzero distance in their past
-    ids = np.array(instance_dict["agent_ids"])[is_moving]
+    agents = np.array(agent_list)[is_moving]
     distances = distances[is_moving]
 
-    if ids.size == 0:
+    if agents.size == 0:
         print("Zero moving agents, no target agent can be selected")
         return []
 
-    if ids.size <= n:
-        print(f"returning all available candidates: only {ids.size} moving agents in the scene")
-        return list(ids)
+    if agents.size <= n:
+        print(f"returning all available candidates: only {agents.size} moving agents in the scene")
+        return list(agents)
 
-    return list(np.random.choice(ids, n, replace=False, p=distances/sum(distances)))
+    return list(np.random.choice(agents, n, replace=False, p=distances/sum(distances)))
 
 
 def target_agent_no_ego_zones(boundary: sg.Polygon, traj: np.array, radius: float = 60, wedge_angle: float = 60) -> List[sg.Polygon]:
@@ -269,7 +271,7 @@ def place_ego(instance_dict: dict):
 
     r_agents = 10           # [px]  how "wide" we approximate agents to be
 
-    target_agents = select_random_target_agents(instance_dict, n_targets)
+    target_agents = select_random_target_agents(instance_dict["agents"], instance_dict["past_window"], n_targets)
 
     # set safety perimeter around the edges of the scene
     scene_boundary = default_rectangle(instance_dict["image_tensor"].shape[1:])
@@ -283,7 +285,8 @@ def place_ego(instance_dict: dict):
     # define agent_buffers, a list of polygons
     # corresponding to the past trajectories of every agent, inflated by some small radius
     agent_buffers = [
-        shapely_poly_2_skgeom_poly(LineString(future).buffer(r_agents)) for future in instance_dict["pasts"]
+        shapely_poly_2_skgeom_poly(LineString(agent.get_traj_section(instance_dict["past_window"])).buffer(r_agents))
+        for agent in instance_dict["agents"]
     ]
 
     # lists to keep track of target agents' desired occlusion timesteps
@@ -296,12 +299,14 @@ def place_ego(instance_dict: dict):
     # (specifically, by their agent_buffer)
     target_agents_fully_observable_regions = []
 
-    for idx, agent_id in enumerate(instance_dict["agent_ids"]):
-        past_traj = instance_dict["pasts"][idx]
-        future_traj = instance_dict["futures"][idx]
-        full_traj = np.concatenate((past_traj, future_traj), axis=0)
+    # for idx, agent_id in enumerate(instance_dict["agent_ids"]):
+    for idx, agent in enumerate(instance_dict["agents"]):
+        past_traj = agent.get_traj_section(instance_dict["past_window"])
+        future_traj = agent.get_traj_section(instance_dict["future_window"])
+        full_traj = agent.get_traj_section(np.concatenate((instance_dict["past_window"],
+                                                           instance_dict["future_window"])))
 
-        if agent_id in target_agents:
+        if agent in target_agents:
             # pick random occlusion and disocclusion timesteps
             last_obs_timestep = np.random.randint(min_obs - 1, past_traj.shape[0] - 1)
             first_reobs_timestep = np.random.randint(future_traj.shape[0] - min_reobs + 1)
@@ -390,11 +395,9 @@ def place_ego(instance_dict: dict):
         no_zones.append(ego_buffer)
 
         # ITERATE OVER TARGET AGENTS
-        for agent_id, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
-            # todo: do this better, this should be handled better
-            # ideally we should also iterate over the pasts and futures too.
-            past_traj = instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)]
-            future_traj = instance_dict["futures"][instance_dict["agent_ids"].index(agent_id)]
+        for agent, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
+            past_traj = agent.get_traj_section(instance_dict["past_window"])
+            future_traj = agent.get_traj_section(instance_dict["future_window"])
 
             # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
             occluder_region = sg.Polygon(np.array(
@@ -459,11 +462,11 @@ def place_ego(instance_dict: dict):
 
     # plot chosen occlusion points
     [ax.scatter(
-        *instance_dict["pasts"][instance_dict["agent_ids"].index(agent_id)][t_occl], marker="x", c="Yellow"
-    ) for agent_id, t_occl in zip(target_agents, t_occls)]
+        *agent.get_traj_section(instance_dict["past_window"])[t_occl], marker="x", c="Yellow"
+    ) for agent, t_occl in zip(target_agents, t_occls)]
     [ax.scatter(
-        *instance_dict["futures"][instance_dict["agent_ids"].index(agent_id)][t_disoccl], marker="x", c="Yellow"
-    ) for agent_id, t_disoccl in zip(target_agents, t_disoccls)]
+        *agent.get_traj_section(instance_dict["future_window"])[t_disoccl], marker="x", c="Yellow"
+    ) for agent, t_disoccl in zip(target_agents, t_disoccls)]
 
     # plot the fully observable regions
     [skgeom_plot_polygon(ax, poly, facecolor="blue", edgecolor="blue", alpha=0.2) for poly in target_agents_fully_observable_regions.polygons]
@@ -484,29 +487,29 @@ def place_ego(instance_dict: dict):
 
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     print(f"Checking polygon generation timing: {n_iterations} iterations\n")
-    # before = time()
-    # for i in range(n_iterations):
-    #     sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
-    # print(f"skgeom polygon instantiation: {time() - before}")
-    #
-    # before = time()
-    # for i in range(n_iterations):
-    #     Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
-    # print(f"shapely polygon instantiation: {time() - before}")
-    #
-    # before = time()
-    # polysg = sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
-    # polysg = sg.PolygonWithHoles(polysg, [])
-    # for i in range(n_iterations):
-    #     skgeom_poly_2_shapely_poly(polysg)
-    # print(f"skgeom 2 shapely polygon conversion: {time() - before}")
-    #
-    # before = time()
-    # polysp = Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
-    # for i in range(n_iterations):
-    #     shapely_poly_2_skgeom_poly(polysp)
-    # print(f"shapely 2 skgeom polygon conversion: {time() - before}")
-    #
+    before = time()
+    for i in range(n_iterations):
+        sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
+    print(f"skgeom polygon instantiation: {time() - before}")
+
+    before = time()
+    for i in range(n_iterations):
+        Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
+    print(f"shapely polygon instantiation: {time() - before}")
+
+    before = time()
+    polysg = sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
+    polysg = sg.PolygonWithHoles(polysg, [])
+    for i in range(n_iterations):
+        skgeom_poly_2_shapely_poly(polysg)
+    print(f"skgeom 2 shapely polygon conversion: {time() - before}")
+
+    before = time()
+    polysp = Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
+    for i in range(n_iterations):
+        shapely_poly_2_skgeom_poly(polysp)
+    print(f"shapely 2 skgeom polygon conversion: {time() - before}")
+
     # before = time()
     # for i in range(n_iterations):
     #     skgeom_rectangle(instance_dict["image_tensor"])
@@ -526,7 +529,7 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 if __name__ == '__main__':
     print("Ok, let's do this")
 
-    instance_idx = 36225
+    instance_idx = 7592
 
     config = sdd_extract.get_config()
     dataset = sdd_dataloader.StanfordDroneDataset(config_dict=config)
