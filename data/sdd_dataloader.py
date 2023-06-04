@@ -144,51 +144,12 @@ class StanfordDroneDataset(Dataset):
 
         # generate a window of the timesteps we are interested in extracting from the scene dataset
         window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + lookup["timestep"]
-        # generate subdataframe of the scene with only the timesteps present within the window
-        # mini_df = self.frames.loc[lookup["scene/video"]][self.frames.loc[lookup["scene/video"]]["frame"].isin(window)]
+        # generate subdataframe of the specific video
         scenevideo_df = self.frames.loc[(scene, video)]
-        mini_df = self.frames.loc[(scene, video)][self.frames.loc[(scene, video)]["frame"].isin(window)]
-        # print(mini_df)
-        # print(type(mini_df))
-        # print(len(mini_df))
-
-        # extract the trajectories of fully observed agents
-        agent_ids = []
-        labels = []
-        pasts = []
-        futures = []
-        is_fully_observed = []
 
         agents = [StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id]) for agent_id in lookup["full_obs"]]
 
-        for agent_id in lookup["full_obs"]:
-            agent_obj = StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id])
-
-            # label of the agent of interest
-            # label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
-            # print(f"{agent_id=}, {agent_obj.id=}")
-            # print(f"{label=}, {agent_obj.label=}")
-            # print(f"{lookup['timestep']=}, {window=}, {agent_obj.timesteps=}")
-            # print(f"{agent_obj.fulltraj=}")
-
-            # # empty sequence
-            # sequence = np.empty((self.T_obs + self.T_pred, 2))
-            # sequence.fill(np.nan)
-            #
-            # sequence[:, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
-            # sequence[:, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
-            #
-            # assert not np.isnan(sequence).any()
-
-            agent_ids.append(agent_obj.id)
-            labels.append(agent_obj.label)
-            # pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
-            # futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
-            # is_fully_observed.append(True)
-            pasts.append(torch.from_numpy(agent_obj.get_traj_section(time_window=window[:self.T_obs])))
-            futures.append(torch.from_numpy(agent_obj.get_traj_section(time_window=window[self.T_obs:])))
-            is_fully_observed.append(True)
-
+        # todo: maybe consider doing something with partially observed agents in the delivery of the instance_dict
         # # extract the trajectories of partially observed agents
         # for agent_id in lookup["present"]:
         #     # label of the agent of interest
@@ -220,18 +181,6 @@ class StanfordDroneDataset(Dataset):
             "future_window": window[self.T_obs:],
             "image_tensor": image_tensor
         }
-
-        # instance_dict = {
-        #     "scene": scene,
-        #     "video": video,
-        #     "timestep": lookup["timestep"],
-        #     "agent_ids": agent_ids,
-        #     "pasts": pasts,
-        #     "futures": futures,
-        #     "labels": labels,
-        #     "is_fully_observed": is_fully_observed,
-        #     "image_tensor": image_tensor
-        # }
 
         return instance_dict
 
