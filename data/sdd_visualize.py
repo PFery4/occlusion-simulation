@@ -80,11 +80,10 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
 
     :param draw_ax: the matplotlib axes object onto which we are drawing
     :param instance_dict: dictionary containing the following:
+        - 'agents': a list of StanfordDroneAgent objects, instantiated through the class defined in sdd_dataloader.py
+        - 'past_window': a numpy array of type 'int', indicating the timesteps corresponding to the observation window
+        - 'future_window': a numpy array of type 'int', indicating the timesteps corresponding to the prediction horizon
         - 'image_tensor': a torch tensor containing the reference image data
-        - 'pasts': a list of torch tensors with coordinates of the past trajectories of agents
-        - 'futures': a list of torch tensors with coordinates of the future trajectories of agents
-        - 'labels': a list of corresponding agent labels (ie, the class they belong to)
-        - 'is_fully_observed': for a corresponding agent, whether all past and future timesteps are available
     :return:
     """
     # TODO: maybe add a check to draw partially observed trajectories in gray
@@ -96,26 +95,43 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     # first draw the reference image onto the axis
     draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
 
-    color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["pasts"]))))
-    for agent_id, past, future, label, full_obs in zip(
-            instance_dict["agent_ids"],
-            instance_dict["pasts"],
-            instance_dict["futures"],
-            instance_dict["labels"],
-            instance_dict["is_fully_observed"]
-    ):
-        c = next(color_iter).reshape(1, -1) if full_obs else "gray"     # todo: change this later. I don't know how, but I don't like this way of doing things
+    color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["agents"]))))
+    for agent in instance_dict["agents"]:
+        c = next(color_iter).reshape(1, -1)
+        past = agent.get_traj_section(time_window=instance_dict["past_window"])
+        future = agent.get_traj_section(
+            time_window=np.array([instance_dict["past_window"][-1]] + list(instance_dict["future_window"]))
+        )
 
         draw_ax.plot(past[:, 0], past[:, 1], c=c)
-        draw_ax.scatter(past[:-1, 0], past[:-1, 1],
-                        s=20, marker="x", c=c)
+        draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", c=c)
         draw_ax.scatter(past[-1, 0], past[-1, 1],
-                        s=40, marker="x", c=c, label=f"${SDD_CLASS_SYMBOLS[label]}^{{{agent_id}}}$")
-        dashed_segment = np.insert(future, 0, past[-1, :], axis=0)
-        draw_ax.plot(dashed_segment[:, 0], dashed_segment[:, 1], c=c, linestyle="dashed", alpha=0.8)
-        draw_ax.scatter(future[:, 0], future[:, 1],
-                        s=20, marker="x", c=c, alpha=0.8)
-        draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
+                        s=40, marker="x", c=c, label=f"${SDD_CLASS_SYMBOLS[agent.label]}^{{{agent.id}}}$")
+        draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
+        draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", c=c, alpha=0.8)
+
+    draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
+
+    # color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["pasts"]))))
+    # for agent_id, past, future, label, full_obs in zip(
+    #         instance_dict["agent_ids"],
+    #         instance_dict["pasts"],
+    #         instance_dict["futures"],
+    #         instance_dict["labels"],
+    #         instance_dict["is_fully_observed"]
+    # ):
+    #     c = next(color_iter).reshape(1, -1) if full_obs else "gray"     # todo: change this later. I don't know how, but I don't like this way of doing things
+    #
+    #     draw_ax.plot(past[:, 0], past[:, 1], c=c)
+    #     draw_ax.scatter(past[:-1, 0], past[:-1, 1],
+    #                     s=20, marker="x", c=c)
+    #     draw_ax.scatter(past[-1, 0], past[-1, 1],
+    #                     s=40, marker="x", c=c, label=f"${SDD_CLASS_SYMBOLS[label]}^{{{agent_id}}}$")
+    #     dashed_segment = np.insert(future, 0, past[-1, :], axis=0)
+    #     draw_ax.plot(dashed_segment[:, 0], dashed_segment[:, 1], c=c, linestyle="dashed", alpha=0.8)
+    #     draw_ax.scatter(future[:, 0], future[:, 1],
+    #                     s=20, marker="x", c=c, alpha=0.8)
+    #     draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
 
 
 def visualize_full_trajectories_on_all_scenes():
