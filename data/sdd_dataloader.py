@@ -45,7 +45,7 @@ class StanfordDroneDataset(Dataset):
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
         found_path = self.find_pickle(config_dict["dataset"]["pickle_path"])
-        if found_path and False:        # todo: remove 'and False' once you're done modifying the dataloader
+        if found_path:
             print(f"Loading dataloader from:\n{found_path}")
             self.frames, self.lookuptable = self.load_data(found_path)
         else:
@@ -125,10 +125,7 @@ class StanfordDroneDataset(Dataset):
             self.frames.set_index(["scene", "video"], inplace=True)
             self.frames.sort_index(inplace=True)
 
-            print(self.lookuptable)
-            print(self.frames)
-
-            # self.save_data(config_dict["dataset"]["pickle_path"])
+            self.save_data(config_dict["dataset"]["pickle_path"])
 
     def __len__(self):
         return len(self.lookuptable)
@@ -161,6 +158,8 @@ class StanfordDroneDataset(Dataset):
         pasts = []
         futures = []
         is_fully_observed = []
+
+        agents = [StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id]) for agent_id in lookup["full_obs"]]
 
         for agent_id in lookup["full_obs"]:
             agent_obj = StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id])
@@ -216,16 +215,30 @@ class StanfordDroneDataset(Dataset):
         instance_dict = {
             "scene": scene,
             "video": video,
-            "timestep": lookup["timestep"],
-            "agent_ids": agent_ids,
-            "pasts": pasts,
-            "futures": futures,
-            "labels": labels,
-            "is_fully_observed": is_fully_observed,
+            "agents": agents,
+            "past_window": window[:self.T_obs],
+            "future_window": window[self.T_obs:],
             "image_tensor": image_tensor
         }
 
+        # instance_dict = {
+        #     "scene": scene,
+        #     "video": video,
+        #     "timestep": lookup["timestep"],
+        #     "agent_ids": agent_ids,
+        #     "pasts": pasts,
+        #     "futures": futures,
+        #     "labels": labels,
+        #     "is_fully_observed": is_fully_observed,
+        #     "image_tensor": image_tensor
+        # }
+
         return instance_dict
+
+    def find_idx(self, scene: str, video: str, timestep: int) -> int:
+        video_slice = self.lookuptable.index.get_loc((scene, video))
+        timestep_index = np.array(*np.where(self.lookuptable[video_slice]["timestep"] == timestep)).item()
+        return int(video_slice.start + timestep_index)
 
     def metadata_dict(self):
         metadata_dict = {
@@ -270,7 +283,8 @@ class StanfordDroneDataset(Dataset):
         with open(os.path.join(path, f"{save_name}.json"), "w", encoding="utf8") as f:
             json.dump(self.metadata_dict(), f, indent=4)
 
-    def load_data(self, filepath):
+    @staticmethod
+    def load_data(filepath):
         """
         reads the pickle file with name 'filepath', and assigns corresponding values to self.frames and self.lookuptable
         :param filepath: the path of the pickle file to read from
@@ -291,39 +305,39 @@ if __name__ == '__main__':
     print(f"{len(dataset)=}")
 
     ##################################################################################################################
-    # n_rows = 2
-    # n_cols = n_rows
-    #
-    # fig, axes = plt.subplots(n_rows, n_cols)
-    # fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
-    #
-    # idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
-    #
-    # print(idx_samples)
-    # for ax_k, idx in enumerate(idx_samples):
-    #
-    #     ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
-    #
-    #     before = time.time()
-    #     instance_dict = dataset.__getitem__(idx)
-    #     after = time.time()
-    #     print(f"getitem({idx}) took {after - before} seconds")
-    #
-    #     axes[ax_x, ax_y].title.set_text(idx)
-    #     sdd_visualize.visualize_training_instance(
-    #         draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
-    #     )
-    #
-    # plt.show()
+    n_rows = 2
+    n_cols = n_rows
+
+    fig, axes = plt.subplots(n_rows, n_cols)
+    fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
+
+    idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
+
+    print(idx_samples)
+    for ax_k, idx in enumerate(idx_samples):
+
+        ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
+
+        before = time.time()
+        instance_dict = dataset.__getitem__(idx)
+        after = time.time()
+        print(f"getitem({idx}) took {after - before} seconds")
+
+        axes[ax_x, ax_y].title.set_text(idx)
+        sdd_visualize.visualize_training_instance(
+            draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
+        )
+
+    plt.show()
     ##################################################################################################################
 
-    print(dataset.frames.columns)
-
-    indices = [np.random.randint(0, len(dataset))]
-    indices = [33640, 33641, 33642, 33643, 33644, 33645]
-    print(f"{indices=}")
-
-    [print(dataset.__getitem__(idx)["scene"]) for idx in indices]
-    [print(dataset.__getitem__(idx)["video"]) for idx in indices]
-    [print(dataset.__getitem__(idx)["agent_ids"]) for idx in indices]
-    [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
+    # print(dataset.frames.columns)
+    #
+    # indices = [np.random.randint(0, len(dataset))]
+    # indices = [33640, 33641, 33642, 33643, 33644, 33645]
+    # print(f"{indices=}")
+    #
+    # [print(dataset.__getitem__(idx)["scene"]) for idx in indices]
+    # [print(dataset.__getitem__(idx)["video"]) for idx in indices]
+    # [print(dataset.__getitem__(idx)["agent_ids"]) for idx in indices]
+    # [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
