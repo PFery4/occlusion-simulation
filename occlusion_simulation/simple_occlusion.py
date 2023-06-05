@@ -156,6 +156,25 @@ def target_agent_no_ego_zones(boundary: sg.Polygon, traj: np.array, radius: floa
     return [target_buffer, no_ego_1, no_ego_2]
 
 
+def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: float, angle: float) -> List[sg.Polygon]:
+    # offset: distance to pull the wedges "inward"
+    u_traj = np.array(traj[-1] - traj[0])
+    u_traj /= np.linalg.norm(u_traj)
+    wedge_1 = bounded_wedge(
+        p=(np.array(traj[0])) + u_traj * offset,
+        u=u_traj,
+        theta=float(np.radians(angle)),
+        boundary=boundary
+    )
+    wedge_2 = bounded_wedge(
+        p=(np.array(traj[-1])) - u_traj * offset,
+        u=-u_traj,
+        theta=float(np.radians(angle)),
+        boundary=boundary
+    )
+    return [wedge_1, wedge_2]
+
+
 def shapely_poly_2_skgeom_poly(poly: Polygon) -> sg.Polygon:
     return sg.Polygon([sg.Point2(*coord) for coord in poly.exterior.coords[:-1]][::-1])
 
@@ -318,20 +337,7 @@ def perform_simulation(
 
         target_agents_fully_observable_regions.append(traj_fully_observable)
 
-        u_traj = np.array(full_traj[-1] - full_traj[0])
-        u_traj /= np.linalg.norm(u_traj)
-        no_ego_wedges.append(bounded_wedge(
-            p=(np.array(past_traj[0])) + u_traj * d_min_ag_ego,
-            u=u_traj,
-            theta=float(np.radians(taper_angle)),
-            boundary=scene_boundary
-        ))
-        no_ego_wedges.append(bounded_wedge(
-            p=(np.array(future_traj[-1])) - u_traj * d_min_ag_ego,
-            u=-u_traj,
-            theta=float(np.radians(taper_angle)),
-            boundary=scene_boundary
-        ))
+        no_ego_wedges.extend(target_agent_no_ego_wedges(scene_boundary, full_traj, d_min_ag_ego, taper_angle))
 
     no_ego_wedges = sg.PolygonSet(no_ego_wedges)
 
