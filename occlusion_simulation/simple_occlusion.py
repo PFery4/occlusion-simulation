@@ -131,31 +131,6 @@ def select_random_target_agents(agent_list: List[sdd_dataloader.StanfordDroneAge
     return list(np.random.choice(agents, n, replace=False, p=distances/sum(distances)))
 
 
-def target_agent_no_ego_zones(boundary: sg.Polygon, traj: np.array, radius: float = 60, wedge_angle: float = 60)\
-        -> List[sg.Polygon]:
-    # generate safety buffer area around agent's trajectory
-    # target_buffer = shapely_poly_2_skgeom_poly(LineString(traj).buffer(radius).convex_hull)
-    target_buffer = shapely_poly_2_skgeom_poly(LineString(traj).buffer(radius))
-
-    # define no-ego wedges based on taper angle, in order to prevent situations where ego
-    # is directly aligned with target agent's trajectory
-    u_traj = np.array(traj[-1] - traj[0])  # unit vector of agent's trajectory (future[-1], past[0])
-    u_traj /= np.linalg.norm(u_traj)
-    no_ego_1 = bounded_wedge(
-        p=(np.array(traj[-1]) - u_traj * radius),
-        u=-u_traj,
-        theta=float(np.radians(wedge_angle)),
-        boundary=boundary
-    )
-    no_ego_2 = bounded_wedge(
-        p=(np.array(traj[0]) + u_traj * radius),
-        u=u_traj,
-        theta=float(np.radians(wedge_angle)),
-        boundary=boundary
-    )
-    return [target_buffer, no_ego_1, no_ego_2]
-
-
 def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: float, angle: float) -> List[sg.Polygon]:
     # offset: distance to pull the wedges "inward"
     u_traj = np.array(traj[-1] - traj[0])
