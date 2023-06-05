@@ -15,6 +15,7 @@ import skgeom as sg
 import functools
 from time import time
 from scipy.interpolate import interp1d
+import torch
 
 
 # def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
@@ -271,7 +272,12 @@ def trajectory_buffers(
     ]
 
 
-def perform_simulation(instance_dict: dict):
+def perform_simulation(
+        image_tensor: torch.Tensor,
+        agents: List[sdd_dataloader.StanfordDroneAgent],
+        past_window: np.array,
+        future_window: np.array
+):
     n_targets = 2           # [-]   number of desired target agents to occlude virtually
     # n_egos = 1              # [-]   number of candidate positions to sample for the simulated ego
 
@@ -287,37 +293,39 @@ def perform_simulation(instance_dict: dict):
 
     r_agents = 10           # [px]  how "wide" we approximate agents to be
 
+    full_window = np.concatenate((past_window, future_window))
+
     # set safety perimeter around the edges of the scene
-    scene_boundary = default_rectangle(instance_dict["image_tensor"].shape[1:])
+    scene_boundary = default_rectangle(image_tensor.shape[1:])
     frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border)
 
     # define agent_buffers, a list of sg.Polygons
     # corresponding to the past trajectories of every agent, inflated by some small radius (used for computation of
     # visibility polygons, in order to place the ego_point)
     agent_visipoly_buffers = trajectory_buffers(
-        instance_dict["agents"],
-        instance_dict["past_window"],
+        agents,
+        past_window,
         r_agents
     )
 
     # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
     no_ego_buffers = trajectory_buffers(
-        instance_dict["agents"],
-        np.concatenate([instance_dict["past_window"], instance_dict["future_window"]]),
+        agents,
+        full_window,
         d_min_ag_ego
     )
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
     no_occluder_buffers = trajectory_buffers(
-        instance_dict["agents"],
-        np.concatenate([instance_dict["past_window"], instance_dict["future_window"]]),
+        agents,
+        full_window,
         d_min_occl_ag
     )
     # no_occluder_buffers = sg.PolygonSet(no_occluder_buffers)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
-    target_agents = select_random_target_agents(instance_dict["agents"], instance_dict["past_window"], n_targets)
+    target_agents = select_random_target_agents(agents, past_window, n_targets)
 
     # define no_ego_wedges, a list of sg.Polygons, within which we wish not to place the ego
     # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
@@ -337,10 +345,9 @@ def perform_simulation(instance_dict: dict):
     target_agents_fully_observable_regions = []
 
     for agent in target_agents:
-        past_traj = agent.get_traj_section(instance_dict["past_window"])
-        future_traj = agent.get_traj_section(instance_dict["future_window"])
-        full_traj = agent.get_traj_section(np.concatenate((instance_dict["past_window"],
-                                                           instance_dict["future_window"])))
+        past_traj = agent.get_traj_section(past_window)
+        future_traj = agent.get_traj_section(future_window)
+        full_traj = agent.get_traj_section(full_window)
 
         # pick random occlusion and disocclusion timesteps
         last_obs_timestep = np.random.randint(min_obs - 1, past_traj.shape[0] - 1)
@@ -356,7 +363,7 @@ def perform_simulation(instance_dict: dict):
         # to generate the regions within which every coordinate of the target agent is visible, we first need
         # the buffers of every *other* agent
         other_buffers = agent_visipoly_buffers.copy()
-        idx = instance_dict["agents"].index(agent)
+        idx = agents.index(agent)
         other_buffers.pop(idx)
 
         # creating the sg.arrangement.Arrangement object necessary to compute the visibility polygons
@@ -433,9 +440,7 @@ def perform_simulation(instance_dict: dict):
     p2s = []
     occluder_segments = []
     for target_agent, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
-        # past_traj = target_agent.get_traj_section(instance_dict["past_window"])
-        # future_traj = target_agent.get_traj_section(instance_dict["future_window"])
-        full_traj = target_agent.get_traj_section(np.concatenate((instance_dict["past_window"], instance_dict["future_window"])))
+        full_traj = target_agent.get_traj_section(full_window)
 
         # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
         p1_ego_traj_triangle = sg.Polygon(np.array(
@@ -506,7 +511,7 @@ def perform_simulation(instance_dict: dict):
 
     # visualization part
     fig, axs = plt.subplots(nrows=2, ncols=3)
-    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
+    # [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
     sim_visualize.plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers,
                                          frame_box)
     sim_visualize.plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
@@ -520,35 +525,35 @@ def perform_simulation(instance_dict: dict):
 
     # I. agent buffers & frame_box
     fig1, ax1 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax1, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax1, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_1(ax1, agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
 
     # II. target agents' occlusion timesteps, wedges and visibility polygons
     fig2, ax2 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
                                          target_agents_fully_observable_regions, p_occls, p_disoccls)
 
     # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
     fig3, ax3 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_3(ax3, yes_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
                                          ego_buffer, p1_ego_traj_triangles)
 
     # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
     fig4, ax4 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, triangulated_p1_regions, p1s,
                                          p1_visipolys, p2_ego_traj_triangles)
 
     # V. triangulated p2_regions, p2
     fig5, ax5 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax5, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax5, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
 
     # VI. occluder, ego_point visibility
     fig6, ax6 = plt.subplots()
-    sdd_visualize.visualize_training_instance(ax6, instance_dict=instance_dict)
+    # sdd_visualize.visualize_training_instance(ax6, instance_dict=instance_dict)
     sim_visualize.plot_simulation_step_6(ax6, p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
     plt.show(block=False)
@@ -605,7 +610,12 @@ def main():
     instance_dict = dataset.__getitem__(instance_idx)
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
-    perform_simulation(instance_dict=instance_dict)
+    img_tensor = instance_dict["image_tensor"]
+    agents = instance_dict["agents"]
+    past_window = instance_dict["past_window"]
+    future_window = instance_dict["future_window"]
+
+    perform_simulation(image_tensor=img_tensor, agents=agents, past_window=past_window, future_window=future_window)
 
 
 if __name__ == '__main__':
