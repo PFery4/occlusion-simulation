@@ -302,26 +302,14 @@ def perform_simulation(
     # define agent_buffers, a list of sg.Polygons
     # corresponding to the past trajectories of every agent, inflated by some small radius (used for computation of
     # visibility polygons, in order to place the ego_point)
-    agent_visipoly_buffers = trajectory_buffers(
-        agents,
-        past_window,
-        r_agents
-    )
+    agent_visipoly_buffers = trajectory_buffers(agents, past_window, r_agents)
 
     # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
-    no_ego_buffers = trajectory_buffers(
-        agents,
-        full_window,
-        d_min_ag_ego
-    )
+    no_ego_buffers = trajectory_buffers(agents, full_window, d_min_ag_ego)
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(
-        agents,
-        full_window,
-        d_min_occl_ag
-    )
+    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
     # no_occluder_buffers = sg.PolygonSet(no_occluder_buffers)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
