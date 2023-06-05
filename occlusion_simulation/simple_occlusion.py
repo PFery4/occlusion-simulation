@@ -5,9 +5,6 @@ import data.sdd_dataloader as sdd_dataloader
 import data.sdd_extract as sdd_extract
 import visualization.sdd_visualize as sdd_visualize
 import visualization.simulation_visualize as sim_visualize
-# import matplotlib.path as mpl_path
-# import matplotlib.patches as mpl_patches
-# import matplotlib.collections as mpl_coll
 from shapely.geometry import Point, LineString, Polygon, GeometryCollection
 from shapely.ops import triangulate, voronoi_diagram
 from typing import List, Tuple, Union
