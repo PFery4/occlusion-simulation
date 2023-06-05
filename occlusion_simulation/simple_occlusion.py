@@ -344,12 +344,12 @@ def perform_simulation(instance_dict: dict):
 
         # pick random occlusion and disocclusion timesteps
         last_obs_timestep = np.random.randint(min_obs - 1, past_traj.shape[0] - 1)
-        first_reobs_timestep = np.random.randint(future_traj.shape[0] - min_reobs + 1)
+        first_reobs_timestep = np.random.randint(future_traj.shape[0] - min_reobs + 1) + past_traj.shape[0]
         t_occls.append(last_obs_timestep)
         t_disoccls.append(first_reobs_timestep)
 
-        p_occl = past_traj[last_obs_timestep]
-        p_disoccl = future_traj[first_reobs_timestep]
+        p_occl = full_traj[last_obs_timestep]
+        p_disoccl = full_traj[first_reobs_timestep]
         p_occls.append(p_occl)
         p_disoccls.append(p_disoccl)
 
@@ -433,14 +433,15 @@ def perform_simulation(instance_dict: dict):
     p2s = []
     occluder_segments = []
     for target_agent, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
-        past_traj = target_agent.get_traj_section(instance_dict["past_window"])
-        future_traj = target_agent.get_traj_section(instance_dict["future_window"])
+        # past_traj = target_agent.get_traj_section(instance_dict["past_window"])
+        # future_traj = target_agent.get_traj_section(instance_dict["future_window"])
+        full_traj = target_agent.get_traj_section(np.concatenate((instance_dict["past_window"], instance_dict["future_window"])))
 
         # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
         p1_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             np.array(past_traj[t_occl]),
-             np.array(past_traj[t_occl + 1])]
+             np.array(full_traj[t_occl]),
+             np.array(full_traj[t_occl + 1])]
         ))
         if p1_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p1_ego_traj_triangle.reverse_orientation()
@@ -474,9 +475,9 @@ def perform_simulation(instance_dict: dict):
 
         p2_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             np.array(future_traj[t_disoccl]),
-             np.array(future_traj[t_disoccl - 1])]
-        ))     # TODO: PROBLEM WHEN t_disoccl == 0
+             np.array(full_traj[t_disoccl]),
+             np.array(full_traj[t_disoccl - 1])]
+        ))
         if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p2_ego_traj_triangle.reverse_orientation()
 
