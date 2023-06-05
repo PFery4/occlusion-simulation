@@ -4,7 +4,6 @@ from torch.utils.data import Dataset
 import numpy as np
 import cv2
 import torchvision.transforms
-import torch
 import pickle
 import json
 import uuid
@@ -246,7 +245,7 @@ class StanfordDroneDataset(Dataset):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import time
-    import data.sdd_visualize as sdd_visualize
+    import visualization.sdd_visualize as sdd_visualize
 
     config = sdd_extract.get_config()
 
