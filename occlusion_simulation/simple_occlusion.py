@@ -44,37 +44,6 @@ def bounded_wedge(p: np.array, u: np.array, theta: float, boundary: sg.Polygon) 
     return out.outer_boundary()
 
 
-# def plot_polygon(ax: matplotlib.axes.Axes, poly: Polygon, **kwargs) -> None:
-#     path = mpl_path.Path.make_compound_path(
-#         mpl_path.Path(np.asarray(poly.exterior.coords)[:, :2]),
-#         *[mpl_path.Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors]
-#     )
-#
-#     patch = mpl_patches.PathPatch(path, **kwargs)
-#     collection = mpl_coll.PatchCollection([patch], **kwargs)
-#
-#     ax.add_collection(collection, autolim=True)
-#     ax.autoscale_view()
-
-
-# def skgeom_plot_polygon(ax: matplotlib.axes.Axes, poly: Union[sg.Polygon, sg.PolygonWithHoles], **kwargs) -> None:
-#     if isinstance(poly, sg.Polygon):
-#         path = mpl_path.Path(poly.coords)
-#         # coords = np.concatenate([poly.coords, [poly.coords[-1]]])
-#         # path = mpl_path.Path(coords)
-#     elif isinstance(poly, sg.PolygonWithHoles):
-#         path = mpl_path.Path.make_compound_path(
-#             mpl_path.Path(poly.outer_boundary().coords),
-#             *[mpl_path.Path(hole.coords) for hole in poly.holes]
-#         )
-#
-#     patch = mpl_patches.PathPatch(path, **kwargs)
-#     collection = mpl_coll.PatchCollection([patch], **kwargs)
-#
-#     ax.add_collection(collection, autolim=True)
-#     ax.autoscale_view()
-
-
 def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
     """
     'Naïve' polygon triangulation of the input. The triangulate function from shapely.ops does not guarantee proper
