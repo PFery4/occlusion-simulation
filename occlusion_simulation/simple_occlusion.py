@@ -91,17 +91,6 @@ def sample_triangles(triangles: List[sg.Polygon], k: int = 1) -> List[sg.Polygon
 #     return point_between(traj_seq[t_idx], traj_seq[t_idx+1], np.random.random())
 
 
-# def rectangle(image_tensor: torch.Tensor) -> Polygon:
-#     # returns a rectangle with dimensions corresponding to those of the input image_tensor
-#     y_img, x_img = image_tensor.shape[1:]
-#     return Polygon([(0, 0), (x_img, 0), (x_img, y_img), (0, y_img), (0, 0)])
-
-
-# def skgeom_rectangle(image_tensor: torch.Tensor):
-#     y_img, x_img = image_tensor.shape[1:]
-#     return sg.Polygon([[0, 0], [x_img, 0], [x_img, y_img], [0, y_img]])
-
-
 def default_rectangle(corner_coords: Tuple[float, float]) -> sg.Polygon:
     """
     WARNING: having any of the two input values equal to 0.0 can result in errors
