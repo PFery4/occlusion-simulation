@@ -370,7 +370,8 @@ def perform_simulation(
         p1_ego_traj_triangles.append(p1_ego_traj_triangle)
 
         # extrude no_occluder_regions from the triangle
-        p1_ego_traj_triangle = sg.PolygonSet(p1_ego_traj_triangle).difference(sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
+        p1_ego_traj_triangle = sg.PolygonSet(p1_ego_traj_triangle).difference(
+            sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
 
         # triangulate the resulting region
         p1_triangles = []
