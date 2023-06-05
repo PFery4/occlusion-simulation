@@ -100,11 +100,6 @@ def default_rectangle(corner_coords: Tuple[float, float]) -> sg.Polygon:
     return sg.Polygon([[0, 0], [x, 0], [x, y], [0, y]])
 
 
-# def extruded_polygon(polygon: Polygon, d_border: float) -> Polygon:
-#     hole = polygon.buffer(-d_border)
-#     return Polygon(shell=polygon.exterior.coords, holes=[hole.exterior.coords])
-
-
 def skgeom_extruded_polygon(polygon: sg.Polygon, d_border: float) -> sg.PolygonWithHoles:
     skel = sg.skeleton.create_interior_straight_skeleton(polygon)
     return functools.reduce(lambda a, b: sg.boolean_set.difference(a, b)[0], skel.offset_polygons(d_border), polygon)
