@@ -60,12 +60,6 @@ def polygon_triangulate(polygon: Polygon) -> List[Polygon]:
 def random_points_in_triangle(triangle: sg.Polygon, k: int = 1) -> np.array:
     # inspired by: https://stackoverflow.com/a/47418580
     x = np.sort(np.random.rand(2, k), axis=0)
-
-    # print(np.array(triangle.exterior.xy)[:, :-1])
-    # triangle = shapely_poly_2_skgeom_poly(triangle)
-    # print(triangle.coords.transpose())
-
-    # return np.array(triangle.exterior.xy)[:, :-1] @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
     return triangle.coords.transpose() @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
 
 
