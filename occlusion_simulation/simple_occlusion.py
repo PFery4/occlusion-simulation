@@ -348,8 +348,6 @@ def perform_simulation(instance_dict: dict):
         t_occls.append(last_obs_timestep)
         t_disoccls.append(first_reobs_timestep)
 
-        print(f"{agent.id=}, {last_obs_timestep=}, {first_reobs_timestep=}")
-
         p_occl = past_traj[last_obs_timestep]
         p_disoccl = future_traj[first_reobs_timestep]
         p_occls.append(p_occl)
