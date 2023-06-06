@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as sp
 import shapely.ops as spops
@@ -10,6 +11,7 @@ from typing import List, Tuple, Union
 import data.sdd_extract as sdd_extract
 from data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
 import visualization.simulation_visualize as sim_visualize
+import visualization.sdd_visualize as sdd_visualize
 
 
 # def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
@@ -489,13 +491,19 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
 
 def main():
-    print("Ok, let's do this")
-    instance_idx = 7592
     config = sdd_extract.get_config()
 
     dataset = StanfordDroneDataset(config_dict=config)
 
+    # instance_idx = 7592
+    # instance_idx = np.random.randint(len(dataset))
+    instance_idx = 36371
+    print(f"dataset.__getitem__({instance_idx})")
     instance_dict = dataset.__getitem__(instance_idx)
+
+    fig, ax = plt.subplots()
+    sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
+    plt.show()
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
     sim_params = config["occlusion_simulator"]
