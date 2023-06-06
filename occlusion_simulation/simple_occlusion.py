@@ -210,7 +210,17 @@ def trajectory_buffers(
     ]
 
 
+def generate_occlusion_timesteps(n_agents: int, T_obs: int, T_pred: int, min_obs: int, min_reobs: int) -> List[Tuple[int, int]]:
+    occlusion_windows = []
+    for agent in range(n_agents):
+        t_occl = np.random.randint(min_obs - 1, T_obs - 1)
+        t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
+        occlusion_windows.append((t_occl, t_disoccl))
+    return occlusion_windows
+
+
 def perform_simulation(
+        instance_dict: dict,
         image_tensor: torch.Tensor,
         agents: List[sdd_dataloader.StanfordDroneAgent],
         past_window: np.array,
@@ -258,12 +268,24 @@ def perform_simulation(
     # with the target agents' trajectories
     no_ego_wedges = []
 
-    # lists to keep track of target agents' desired occlusion timesteps
-    # (first and last timesteps surrounding the occlusion)
-    t_occls = []
-    t_disoccls = []
-    p_occls = []
-    p_disoccls = []
+    # generate occlusion windows -> List[Tuple[int, int]]
+    # each item provides two timesteps for each target agent:
+    # - the first one corresponds to the last observed timestep before occlusion
+    # - the second one corresponds to the first re-observed timestep before reappearance
+    occlusion_windows = generate_occlusion_timesteps(
+        n_agents=n_targets,
+        T_obs=past_window.shape[0],
+        T_pred=future_window.shape[0],
+        min_obs=min_obs,
+        min_reobs=min_reobs
+    )
+
+    # # lists to keep track of target agents' desired occlusion timesteps
+    # # (first and last timesteps surrounding the occlusion)
+    # t_occls = []
+    # t_disoccls = []
+    # p_occls = []
+    # p_disoccls = []
 
     # list: a given item is a sg.PolygonSet, which describes the regions in space from which
     # every timestep of that agent can be directly observed, unobstructed by other agents
@@ -271,20 +293,7 @@ def perform_simulation(
     target_agents_fully_observable_regions = []
 
     for agent in target_agents:
-        past_traj = agent.get_traj_section(past_window)
-        future_traj = agent.get_traj_section(future_window)
         full_traj = agent.get_traj_section(full_window)
-
-        # pick random occlusion and disocclusion timesteps
-        last_obs_timestep = np.random.randint(min_obs - 1, past_traj.shape[0] - 1)
-        first_reobs_timestep = np.random.randint(future_traj.shape[0] - min_reobs + 1) + past_traj.shape[0]
-        t_occls.append(last_obs_timestep)
-        t_disoccls.append(first_reobs_timestep)
-
-        p_occl = full_traj[last_obs_timestep]
-        p_disoccl = full_traj[first_reobs_timestep]
-        p_occls.append(p_occl)
-        p_disoccls.append(p_disoccl)
 
         # to generate the regions within which every coordinate of the target agent is visible, we first need
         # the buffers of every *other* agent
@@ -352,14 +361,15 @@ def perform_simulation(
     triangulated_p2_regions = []
     p2s = []
     occluder_segments = []
-    for target_agent, t_occl, t_disoccl in zip(target_agents, t_occls, t_disoccls):
-        full_traj = target_agent.get_traj_section(full_window)
+
+    for target_agent, occlusion_window in zip(target_agents, occlusion_windows):
+        # occlusion_window = (t_occl, t_disoccl)
 
         # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
         p1_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             np.array(full_traj[t_occl]),
-             np.array(full_traj[t_occl + 1])]
+             target_agent.position_at_timestep(full_window[occlusion_window[0]]),
+             target_agent.position_at_timestep(full_window[occlusion_window[0] + 1])]
         ))
         if p1_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p1_ego_traj_triangle.reverse_orientation()
@@ -394,8 +404,8 @@ def perform_simulation(
 
         p2_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             np.array(full_traj[t_disoccl]),
-             np.array(full_traj[t_disoccl - 1])]
+             target_agent.position_at_timestep(full_window[occlusion_window[1]]),
+             target_agent.position_at_timestep(full_window[occlusion_window[1] - 1])]
         ))
         if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p2_ego_traj_triangle.reverse_orientation()
@@ -424,8 +434,13 @@ def perform_simulation(
     occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
 
     # visualization part
+    p_occls = [agent.position_at_timestep(full_window[occlusion_window[0]])
+               for agent, occlusion_window in zip(target_agents, occlusion_windows)]
+    p_disoccls = [agent.position_at_timestep(full_window[occlusion_window[1]])
+                  for agent, occlusion_window in zip(target_agents, occlusion_windows)]
+
     fig, axs = plt.subplots(nrows=2, ncols=3)
-    # [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
+    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
     sim_visualize.plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers,
                                          frame_box)
     sim_visualize.plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
@@ -437,41 +452,40 @@ def perform_simulation(
     sim_visualize.plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
     sim_visualize.plot_simulation_step_6(axs[1, 2], p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
-    # I. agent buffers & frame_box
-    fig1, ax1 = plt.subplots()
+    # # I. agent buffers & frame_box
+    # fig1, ax1 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax1, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_1(ax1, agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
-
-    # II. target agents' occlusion timesteps, wedges and visibility polygons
-    fig2, ax2 = plt.subplots()
+    # sim_visualize.plot_simulation_step_1(ax1, agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
+    #
+    # # II. target agents' occlusion timesteps, wedges and visibility polygons
+    # fig2, ax2 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-                                         target_agents_fully_observable_regions, p_occls, p_disoccls)
-
-    # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
-    fig3, ax3 = plt.subplots()
+    # sim_visualize.plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
+    #                                      target_agents_fully_observable_regions, p_occls, p_disoccls)
+    #
+    # # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
+    # fig3, ax3 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_3(ax3, yes_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
-                                         ego_buffer, p1_ego_traj_triangles)
-
-    # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
-    fig4, ax4 = plt.subplots()
+    # sim_visualize.plot_simulation_step_3(ax3, yes_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
+    #                                      ego_buffer, p1_ego_traj_triangles)
+    #
+    # # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
+    # fig4, ax4 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, triangulated_p1_regions, p1s,
-                                         p1_visipolys, p2_ego_traj_triangles)
-
-    # V. triangulated p2_regions, p2
-    fig5, ax5 = plt.subplots()
+    # sim_visualize.plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, triangulated_p1_regions, p1s,
+    #                                      p1_visipolys, p2_ego_traj_triangles)
+    #
+    # # V. triangulated p2_regions, p2
+    # fig5, ax5 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax5, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
-
-    # VI. occluder, ego_point visibility
-    fig6, ax6 = plt.subplots()
+    # sim_visualize.plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
+    #
+    # # VI. occluder, ego_point visibility
+    # fig6, ax6 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax6, instance_dict=instance_dict)
-    sim_visualize.plot_simulation_step_6(ax6, p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
+    # sim_visualize.plot_simulation_step_6(ax6, p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
-    plt.show(block=False)
-    plt.waitforbuttonpress()
+    plt.show()
 
 
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
@@ -529,7 +543,7 @@ def main():
     past_window = instance_dict["past_window"]
     future_window = instance_dict["future_window"]
 
-    perform_simulation(image_tensor=img_tensor, agents=agents, past_window=past_window, future_window=future_window)
+    perform_simulation(instance_dict, image_tensor=img_tensor, agents=agents, past_window=past_window, future_window=future_window)
 
 
 if __name__ == '__main__':
