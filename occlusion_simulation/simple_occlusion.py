@@ -272,7 +272,6 @@ def perform_simulation(
         future_window: np.array
 ):
     n_targets = 2           # [-]   number of desired target agents to occlude virtually
-    # n_egos = 1              # [-]   number of candidate positions to sample for the simulated ego
 
     min_obs = 4             # [-]   minimum amount of timesteps we want to have observed within observation window
     min_reobs = 2           # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
@@ -303,7 +302,6 @@ def perform_simulation(
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
     no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
-    # no_occluder_buffers = sg.PolygonSet(no_occluder_buffers)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agent_indices = select_random_target_agents(agents, past_window, n_targets)
@@ -331,7 +329,7 @@ def perform_simulation(
     # list: a given item is a sg.PolygonSet, which describes the regions in space from which
     # every timestep of that agent can be directly observed, unobstructed by other agents
     # (specifically, by their agent_buffer)
-    target_agents_fully_observable_regions = trajectory_visibility_polygons(
+    targets_fullobs_regions = trajectory_visibility_polygons(
         agents=agents,
         target_agent_indices=target_agent_indices,
         agent_visipoly_buffers=agent_visipoly_buffers,
@@ -339,38 +337,40 @@ def perform_simulation(
         boundary=scene_boundary
     )
 
-    target_agents_fully_observable_regions = functools.reduce(
+    # reducing into a single sg.PolygonSet
+    targets_fullobs_regions = functools.reduce(
         lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
-        target_agents_fully_observable_regions
+        targets_fullobs_regions
     )
 
-    # the regions within which we sample our ego are the regions within which target agents' full trajectories are
-    # observable, minus the boundaries and no_ego_zones we set previously
-    yes_ego_zones = target_agents_fully_observable_regions.difference(
-        no_ego_buffers.union(no_ego_wedges).union(frame_box)
-    )
-
-    # to sample from yes_ego_zones, we will need to triangulate the regions in yes_ego_zones
+    # the regions within which we sample our ego are those within which target agents' full trajectories are
+    # observable, minus the boundaries and no_ego_zones we set previously.
+    # we will need to triangulate those regions in order to sample a point
     # this can't be done in scikit-geometry (maybe it can?), so we're doing it with shapely instead
     # (see inside triangulate_polyset function)
-    yes_triangles = triangulate_polyset(yes_ego_zones)
+    yes_ego_triangles = triangulate_polyset(
+        targets_fullobs_regions.difference(
+            no_ego_buffers.union(no_ego_wedges).union(frame_box)
+        )
+    )
 
-    # produce an ego_point from yes_triangles
-    ego_point = random_points_in_triangle(*sample_triangles(yes_triangles, k=1), k=1).reshape(2)
+    # produce an ego_point from yes_ego_triangles
+    ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
 
     # COMPUTE OCCLUDERS
     # draw circle around the ego_point
     ego_buffer = shapely_poly_2_skgeom_poly(Point(*ego_point).buffer(d_min_occl_ego))
 
     # ITERATE OVER TARGET AGENTS
-    p1_ego_traj_triangles = []
-    triangulated_p1_regions = []
-    p1s = []
+    p1_area = []
+    p1_triangles = []
+    # p1s = []
     p1_visipolys = []
-    p2_ego_traj_triangles = []
-    triangulated_p2_regions = []
-    p2s = []
-    occluder_segments = []
+    p2_area = []
+    p2_triangles = []
+    # p2s = []
+    # occluder_segments = []
+    occluders = []
 
     for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
         # occlusion_window = (t_occl, t_disoccl)
@@ -384,7 +384,7 @@ def perform_simulation(
         if p1_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p1_ego_traj_triangle.reverse_orientation()
 
-        p1_ego_traj_triangles.append(p1_ego_traj_triangle)
+        p1_area.append(p1_ego_traj_triangle)
 
         # extrude no_occluder_regions from the triangle
         p1_ego_traj_triangle = sg.PolygonSet(p1_ego_traj_triangle).difference(
@@ -392,11 +392,11 @@ def perform_simulation(
 
         # triangulate the resulting region
         p1_triangles = triangulate_polyset(p1_ego_traj_triangle)
-        triangulated_p1_regions.extend(p1_triangles)
+        p1_triangles.extend(p1_triangles)
 
         # sample our first occluder wall coordinate from the region
         p1 = random_points_in_triangle(*sample_triangles(p1_triangles, k=1), k=1)
-        p1s.append(p1)
+        # p1s.append(p1)
 
         # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
         # the point with a straight line
@@ -416,42 +416,70 @@ def perform_simulation(
         if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p2_ego_traj_triangle.reverse_orientation()
 
-        p2_ego_traj_triangles.append(p2_ego_traj_triangle)
+        p2_area.append(p2_ego_traj_triangle)
 
         p2_ego_traj_triangle = sg.PolygonSet(p2_ego_traj_triangle).intersection(p1_visipoly)
 
         p2_triangles = triangulate_polyset(p2_ego_traj_triangle)
-        triangulated_p2_regions.extend(p2_triangles)
+        p2_triangles.extend(p2_triangles)
 
         p2 = random_points_in_triangle(sample_triangles(p2_triangles, k=1)[0], k=1)
-        p2s.append(p2)
+        # p2s.append(p2)
 
-        occluder_seg = sg.Segment2(sg.Point2(*p1), sg.Point2(*p2))
-        occluder_segments.append(occluder_seg)
+        occluders.append((p1, p2))
+
+        # occluder_seg = sg.Segment2(sg.Point2(*p1), sg.Point2(*p2))
+        # occluder_segments.append(occluder_seg)
 
     ego_visi_arrangement = sg.arrangement.Arrangement()
-    [ego_visi_arrangement.insert(seg) for seg in occluder_segments + list(scene_boundary.edges)]
+    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
+     for occluder_coords in occluders]
+    [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
 
     ego_visipoly = visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
     occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
+
+    simulation_dict = {
+        "target_agent_indices": target_agent_indices,
+        "occlusion_windows": occlusion_windows,
+        "frame_box": frame_box,
+        "agent_visipoly_buffers": agent_visipoly_buffers,
+        "no_occluder_buffers": no_occluder_buffers,
+        "no_ego_buffers": no_ego_buffers,
+        "no_ego_wedges": no_ego_wedges,
+        "targets_fullobs_regions": targets_fullobs_regions,
+        "yes_ego_triangles": yes_ego_triangles,
+        "ego_point": ego_point,
+        "ego_buffer": ego_buffer,
+        "p1_area": p1_area,
+        "p1_triangles": p1_triangles,
+        "p1_visipolys": p1_visipolys,
+        "p2_area": p2_area,
+        "p2_triangles": p2_triangles,
+        "occluded_regions": occluded_regions
+    }
+
+    # return simulation_dict
 
     # visualization part
     p_occls = [agents[idx].position_at_timestep(full_window[occlusion_window[0]])
                for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
     p_disoccls = [agents[idx].position_at_timestep(full_window[occlusion_window[1]])
                   for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
+    p1s = [occluder[0] for occluder in occluders]
+    p2s = [occluder[1] for occluder in occluders]
 
     fig, axs = plt.subplots(nrows=2, ncols=3)
     [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
     sim_visualize.plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers,
                                          frame_box)
     sim_visualize.plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-                                         target_agents_fully_observable_regions, p_occls, p_disoccls)
-    sim_visualize.plot_simulation_step_3(axs[0, 2], yes_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
-                                         ego_buffer, p1_ego_traj_triangles)
-    sim_visualize.plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, triangulated_p1_regions, p1s,
-                                         p1_visipolys, p2_ego_traj_triangles)
-    sim_visualize.plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
+                                         targets_fullobs_regions, p_occls, p_disoccls)
+    sim_visualize.plot_simulation_step_3(axs[0, 2], yes_ego_triangles, p_occls, p_disoccls, ego_point,
+                                         no_occluder_buffers, ego_buffer, p1_area)
+    sim_visualize.plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, p1_triangles, p1s,
+                                         p1_visipolys, p2_area)
+    sim_visualize.plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
     sim_visualize.plot_simulation_step_6(axs[1, 2], p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
     # # I. agent buffers & frame_box
@@ -463,24 +491,24 @@ def perform_simulation(
     # fig2, ax2 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
     # sim_visualize.plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-    #                                      target_agents_fully_observable_regions, p_occls, p_disoccls)
+    #                                      targets_fullobs_regions, p_occls, p_disoccls)
     #
     # # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
     # fig3, ax3 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
-    # sim_visualize.plot_simulation_step_3(ax3, yes_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
-    #                                      ego_buffer, p1_ego_traj_triangles)
+    # sim_visualize.plot_simulation_step_3(ax3, yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
+    #                                      ego_buffer, p1_area)
     #
     # # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
     # fig4, ax4 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
-    # sim_visualize.plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, triangulated_p1_regions, p1s,
-    #                                      p1_visipolys, p2_ego_traj_triangles)
+    # sim_visualize.plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, p1_triangles, p1s,
+    #                                      p1_visipolys, p2_area)
     #
     # # V. triangulated p2_regions, p2
     # fig5, ax5 = plt.subplots()
     # sdd_visualize.visualize_training_instance(ax5, instance_dict=instance_dict)
-    # sim_visualize.plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, triangulated_p2_regions, p1s, p2s)
+    # sim_visualize.plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
     #
     # # VI. occluder, ego_point visibility
     # fig6, ax6 = plt.subplots()
