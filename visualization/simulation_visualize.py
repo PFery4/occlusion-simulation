@@ -26,8 +26,6 @@ def plot_sp_polygon(ax: matplotlib.axes.Axes, poly: sp.Polygon, **kwargs) -> Non
 def plot_sg_polygon(ax: matplotlib.axes.Axes, poly: Union[sg.Polygon, sg.PolygonWithHoles], **kwargs) -> None:
     if isinstance(poly, sg.Polygon):
         path = mpl_path.Path(poly.coords)
-        # coords = np.concatenate([poly.coords, [poly.coords[-1]]])
-        # path = mpl_path.Path(coords)
     elif isinstance(poly, sg.PolygonWithHoles):
         path = mpl_path.Path.make_compound_path(
             mpl_path.Path(poly.outer_boundary().coords),
@@ -36,7 +34,7 @@ def plot_sg_polygon(ax: matplotlib.axes.Axes, poly: Union[sg.Polygon, sg.Polygon
     else:
         print(f"incorrect object type:\n{type(poly)}")
         return None
-    
+
     patch = mpl_patches.PathPatch(path, **kwargs)
     collection = mpl_coll.PatchCollection([patch], **kwargs)
 
