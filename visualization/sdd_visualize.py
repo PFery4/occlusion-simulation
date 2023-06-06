@@ -73,7 +73,7 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
-def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict):
+def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict, lgnd: bool = True):
     """
     This function draws the trajectory segments of agents contained within one single training instance extracted from
     the dataloader.
@@ -110,7 +110,8 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
         draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", c=c, alpha=0.8)
 
-    draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
+    if lgnd:
+        draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
 
 
 def visualize_full_trajectories_on_all_scenes():

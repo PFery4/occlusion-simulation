@@ -188,8 +188,11 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     p1s = [occluder[0] for occluder in occluders]
     p2s = [occluder[1] for occluder in occluders]
 
-    fig, axs = plt.subplots(nrows=2, ncols=3)
-    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
+    gs_kw = dict(wspace=0.1, hspace=0.1)
+    fig, axs = plt.subplots(nrows=2, ncols=3, gridspec_kw=gs_kw)
+    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict, lgnd=False)
+     for ax in axs.reshape(-1)[:-1]]
+    sdd_visualize.visualize_training_instance(axs[1, 2], instance_dict=instance_dict)
     plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
     plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
                            targets_fullobs_regions, p_occls, p_disoccls)
