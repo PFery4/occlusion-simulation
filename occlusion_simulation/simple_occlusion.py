@@ -260,24 +260,26 @@ def triangulate_polyset(polyset: sg.PolygonSet) -> List[sg.Polygon]:
 
 
 def simulate_occlusions(
+        config: dict,
         image_tensor: torch.Tensor,
         agents: List[StanfordDroneAgent],
         past_window: np.array,
         future_window: np.array
 ):
-    n_targets = 2           # [-]   number of desired target agents to occlude virtually
+    print(config)
+    n_targets = config["n_target_agents"]
 
-    min_obs = 4             # [-]   minimum amount of timesteps we want to have observed within observation window
-    min_reobs = 2           # [-]   minimum amount of timesteps we want to be able to reobserve after disocclusion
+    min_obs = config["min_obs"]
+    min_reobs = config["min_reobs"]
 
-    d_border = 200          # [px]  distance from scene border
-    d_min_occl_ag = 60      # [px]  minimum distance that any point of a virtual occluder may have wrt any agent
-    d_min_occl_ego = 30     # [px]  minimum distance that any point of a virtual occluder may have wrt ego
-    d_min_ag_ego = (d_min_occl_ego + d_min_occl_ag) * 1.1
+    d_border = config["d_border"]
+    d_min_occl_ag = config["d_min_occl_ag"]
+    d_min_occl_ego = config["d_min_occl_ego"]
+    k_ag_ego_distance = config["k_ag_ego_distance"]
+    d_min_ag_ego = (d_min_occl_ego + d_min_occl_ag) * k_ag_ego_distance
 
-    taper_angle = 45        # [deg] angle for the generation of wedges
-
-    r_agents = 10           # [px]  how "wide" we approximate agents to be
+    taper_angle = config["target_angle"]
+    r_agents = config["r_agents"]
 
     full_window = np.concatenate((past_window, future_window))
 
@@ -485,17 +487,20 @@ def main():
     print("Ok, let's do this")
     instance_idx = 7592
     config = sdd_extract.get_config()
+
     dataset = StanfordDroneDataset(config_dict=config)
 
     instance_dict = dataset.__getitem__(instance_idx)
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
+    sim_params = config["occlusion_simulator"]
     img_tensor = instance_dict["image_tensor"]
     agents = instance_dict["agents"]
     past_window = instance_dict["past_window"]
     future_window = instance_dict["future_window"]
 
     simulation_outputs = simulate_occlusions(
+        config=sim_params,
         image_tensor=img_tensor,
         agents=agents,
         past_window=past_window,
