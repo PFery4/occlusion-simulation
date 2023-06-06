@@ -211,7 +211,9 @@ def trajectory_buffers(
     ]
 
 
-def generate_occlusion_timesteps(n_agents: int, T_obs: int, T_pred: int, min_obs: int, min_reobs: int) -> List[Tuple[int, int]]:
+def generate_occlusion_timesteps(
+        n_agents: int, T_obs: int, T_pred: int, min_obs: int, min_reobs: int
+) -> List[Tuple[int, int]]:
     occlusion_windows = []
     for agent in range(n_agents):
         t_occl = np.random.randint(min_obs - 1, T_obs - 1)
@@ -253,6 +255,13 @@ def trajectory_visibility_polygons(
         trajectory_visipolys.append(traj_fully_observable)
 
     return trajectory_visipolys
+
+
+def triangulate_polyset(polyset: sg.PolygonSet) -> List[sg.Polygon]:
+    triangles = list(itertools.chain(*[
+        polygon_triangulate(skgeom_poly_2_shapely_poly(poly)) for poly in polyset.polygons
+    ]))
+    return [shapely_poly_2_skgeom_poly(triangle) for triangle in triangles]
 
 
 def perform_simulation(
@@ -322,7 +331,6 @@ def perform_simulation(
     # list: a given item is a sg.PolygonSet, which describes the regions in space from which
     # every timestep of that agent can be directly observed, unobstructed by other agents
     # (specifically, by their agent_buffer)
-    # target_agents_fully_observable_regions = []
     target_agents_fully_observable_regions = trajectory_visibility_polygons(
         agents=agents,
         target_agent_indices=target_agent_indices,
@@ -339,23 +347,16 @@ def perform_simulation(
     # the regions within which we sample our ego are the regions within which target agents' full trajectories are
     # observable, minus the boundaries and no_ego_zones we set previously
     yes_ego_zones = target_agents_fully_observable_regions.difference(
-        no_ego_buffers
-    ).difference(
-        frame_box
-    ).difference(
-        no_ego_wedges
+        no_ego_buffers.union(no_ego_wedges).union(frame_box)
     )
 
     # to sample from yes_ego_zones, we will need to triangulate the regions in yes_ego_zones
     # this can't be done in scikit-geometry (maybe it can?), so we're doing it with shapely instead
-    yes_triangles = []
-    [yes_triangles.extend(polygon_triangulate(skgeom_poly_2_shapely_poly(zone))) for zone in yes_ego_zones.polygons]
-    yes_triangles = [shapely_poly_2_skgeom_poly(triangle) for triangle in yes_triangles]
+    # (see inside triangulate_polyset function)
+    yes_triangles = triangulate_polyset(yes_ego_zones)
 
-    # sample points from yes_triangles
-    ego_point = np.array(
-        [random_points_in_triangle(triangle, k=1) for triangle in sample_triangles(yes_triangles, k=1)]
-    ).reshape(2)
+    # produce an ego_point from yes_triangles
+    ego_point = random_points_in_triangle(*sample_triangles(yes_triangles, k=1), k=1).reshape(2)
 
     # COMPUTE OCCLUDERS
     # draw circle around the ego_point
@@ -390,15 +391,11 @@ def perform_simulation(
             sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
 
         # triangulate the resulting region
-        p1_triangles = []
-        [p1_triangles.extend(
-            polygon_triangulate(skgeom_poly_2_shapely_poly(poly))
-        ) for poly in p1_ego_traj_triangle.polygons]
-        p1_triangles = [shapely_poly_2_skgeom_poly(triangle) for triangle in p1_triangles]
+        p1_triangles = triangulate_polyset(p1_ego_traj_triangle)
         triangulated_p1_regions.extend(p1_triangles)
 
         # sample our first occluder wall coordinate from the region
-        p1 = random_points_in_triangle(sample_triangles(p1_triangles, k=1)[0], k=1)
+        p1 = random_points_in_triangle(*sample_triangles(p1_triangles, k=1), k=1)
         p1s.append(p1)
 
         # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
@@ -423,11 +420,7 @@ def perform_simulation(
 
         p2_ego_traj_triangle = sg.PolygonSet(p2_ego_traj_triangle).intersection(p1_visipoly)
 
-        p2_triangles = []
-        [p2_triangles.extend(
-            polygon_triangulate(skgeom_poly_2_shapely_poly(poly))
-        ) for poly in p2_ego_traj_triangle.polygons]
-        p2_triangles = [shapely_poly_2_skgeom_poly(triangle) for triangle in p2_triangles]
+        p2_triangles = triangulate_polyset(p2_ego_traj_triangle)
         triangulated_p2_regions.extend(p2_triangles)
 
         p2 = random_points_in_triangle(sample_triangles(p2_triangles, k=1)[0], k=1)
