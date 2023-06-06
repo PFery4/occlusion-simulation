@@ -200,8 +200,13 @@ def trajectory_buffers(
         time_window: Union[None, np.array],
         buffer_radius: float
 ) -> List[sg.Polygon]:
+    if time_window is not None:
+        return [
+            shapely_poly_2_skgeom_poly(sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius))
+            for agent in agent_list
+        ]
     return [
-        shapely_poly_2_skgeom_poly(sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius))
+        shapely_poly_2_skgeom_poly(sp.LineString(agent.fulltraj).buffer(buffer_radius))
         for agent in agent_list
     ]
 
@@ -297,7 +302,7 @@ def simulate_occlusions(
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
+    no_occluder_buffers = trajectory_buffers(agents, None, d_min_occl_ag)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agent_indices = select_random_target_agents(agents, past_window, n_targets)
