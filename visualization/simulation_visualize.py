@@ -33,7 +33,10 @@ def plot_sg_polygon(ax: matplotlib.axes.Axes, poly: Union[sg.Polygon, sg.Polygon
             mpl_path.Path(poly.outer_boundary().coords),
             *[mpl_path.Path(hole.coords) for hole in poly.holes]
         )
-
+    else:
+        print(f"incorrect object type:\n{type(poly)}")
+        return None
+    
     patch = mpl_patches.PathPatch(path, **kwargs)
     collection = mpl_coll.PatchCollection([patch], **kwargs)
 
@@ -67,9 +70,12 @@ def plot_simulation_step_2(
 ) -> None:
     # II. target agents' occlusion timesteps, wedges and visibility polygons
     [plot_sg_polygon(ax, poly, edgecolor="blue", facecolor="blue", alpha=0.1) for poly in agent_visipoly_buffers]
-    [plot_sg_polygon(ax, poly, edgecolor="red", facecolor="red", alpha=0.1) for poly in no_ego_buffers.union(frame_box).polygons]
-    [plot_sg_polygon(ax, poly, edgecolor="red", facecolor="red", hatch="\\\\\\", alpha=0.2) for poly in no_ego_wedges.polygons]
-    [plot_sg_polygon(ax, poly, edgecolor="cyan", facecolor="cyan", hatch="///", alpha=0.2) for poly in target_agents_fully_observable_regions.polygons]
+    [plot_sg_polygon(ax, poly, edgecolor="red", facecolor="red", alpha=0.1)
+     for poly in no_ego_buffers.union(frame_box).polygons]
+    [plot_sg_polygon(ax, poly, edgecolor="red", facecolor="red", hatch="\\\\\\", alpha=0.2)
+     for poly in no_ego_wedges.polygons]
+    [plot_sg_polygon(ax, poly, edgecolor="cyan", facecolor="cyan", hatch="///", alpha=0.2)
+     for poly in target_agents_fully_observable_regions.polygons]
     [ax.scatter(*p_occl, marker="x", c="Yellow") for p_occl in p_occls]
     [ax.scatter(*p_disoccl, marker="x", c="Yellow") for p_disoccl in p_disoccls]
 
@@ -186,14 +192,12 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
 
     fig, axs = plt.subplots(nrows=2, ncols=3)
     [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict) for ax in axs.reshape(-1)]
-    plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers,
-                                         frame_box)
+    plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
     plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-                                         targets_fullobs_regions, p_occls, p_disoccls)
-    plot_simulation_step_3(axs[0, 2], yes_ego_triangles, p_occls, p_disoccls, ego_point,
-                                         no_occluder_buffers, ego_buffer, p1_area)
-    plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, p1_triangles, p1s,
-                                         p1_visipolys, p2_area)
+                           targets_fullobs_regions, p_occls, p_disoccls)
+    plot_simulation_step_3(axs[0, 2], yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
+                           ego_buffer, p1_area)
+    plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, p1_triangles, p1s, p1_visipolys, p2_area)
     plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
     plot_simulation_step_6(axs[1, 2], p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
@@ -206,19 +210,18 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     fig2, ax2 = plt.subplots()
     sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
     plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-                                         targets_fullobs_regions, p_occls, p_disoccls)
+                           targets_fullobs_regions, p_occls, p_disoccls)
 
     # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
     fig3, ax3 = plt.subplots()
     sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
-    plot_simulation_step_3(ax3, yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
-                                         ego_buffer, p1_area)
+    plot_simulation_step_3(ax3, yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers, ego_buffer,
+                           p1_area)
 
     # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
     fig4, ax4 = plt.subplots()
     sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
-    plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, p1_triangles, p1s,
-                                         p1_visipolys, p2_area)
+    plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, p1_triangles, p1s, p1_visipolys, p2_area)
 
     # V. triangulated p2_regions, p2
     fig5, ax5 = plt.subplots()
