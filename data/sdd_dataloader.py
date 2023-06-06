@@ -25,8 +25,11 @@ class StanfordDroneAgent:
 
         assert not np.isnan(self.fulltraj).any()
 
-    def get_traj_section(self, time_window: np.array):
+    def get_traj_section(self, time_window: np.array) -> np.array:
         return self.fulltraj[np.in1d(self.timesteps, time_window), :]
+
+    def position_at_timestep(self, timestep: int) -> np.array:
+        return self.fulltraj[np.where(self.timesteps == timestep)].reshape(2,)
 
 
 class StanfordDroneDataset(Dataset):
