@@ -10,6 +10,7 @@ from shapely.ops import triangulate, voronoi_diagram
 from typing import List, Tuple, Union
 import skgeom as sg
 import functools
+import itertools
 from time import time
 from scipy.interpolate import interp1d
 import torch
@@ -263,10 +264,13 @@ def perform_simulation(
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agents = select_random_target_agents(agents, past_window, n_targets)
 
-    # define no_ego_wedges, a list of sg.Polygons, within which we wish not to place the ego
+    # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
     # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
     # with the target agents' trajectories
-    no_ego_wedges = []
+    no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
+        target_agent_no_ego_wedges(scene_boundary, agent.get_traj_section(full_window), d_min_ag_ego, taper_angle)
+        for agent in target_agents
+    ])))
 
     # generate occlusion windows -> List[Tuple[int, int]]
     # each item provides two timesteps for each target agent:
@@ -279,13 +283,6 @@ def perform_simulation(
         min_obs=min_obs,
         min_reobs=min_reobs
     )
-
-    # # lists to keep track of target agents' desired occlusion timesteps
-    # # (first and last timesteps surrounding the occlusion)
-    # t_occls = []
-    # t_disoccls = []
-    # p_occls = []
-    # p_disoccls = []
 
     # list: a given item is a sg.PolygonSet, which describes the regions in space from which
     # every timestep of that agent can be directly observed, unobstructed by other agents
@@ -317,10 +314,6 @@ def perform_simulation(
         )
 
         target_agents_fully_observable_regions.append(traj_fully_observable)
-
-        no_ego_wedges.extend(target_agent_no_ego_wedges(scene_boundary, full_traj, d_min_ag_ego, taper_angle))
-
-    no_ego_wedges = sg.PolygonSet(no_ego_wedges)
 
     target_agents_fully_observable_regions = functools.reduce(
         lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
