@@ -273,7 +273,6 @@ def simulate_occlusions(
         past_window: np.array,
         future_window: np.array
 ):
-    print(config)
     n_targets = config["n_target_agents"]
 
     min_obs = config["min_obs"]
@@ -304,7 +303,7 @@ def simulate_occlusions(
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(agents, None, d_min_occl_ag)
+    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agent_indices = select_random_target_agents(agents, past_window, n_targets)
@@ -458,6 +457,47 @@ def simulate_occlusions(
     return simulation_dict
 
 
+def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
+    # TODO: WIP WIP WIP
+
+    from tqdm import tqdm
+
+    n_tries_per_instance = 3
+    errors = 0
+
+    print(len(dataset))
+
+    for idx in (pbar := tqdm(range(len(dataset)))):
+
+        pbar.set_description(f"ERRORS: {errors}")
+
+        instance_dict = dataset.__getitem__(idx)
+
+        img_tensor = instance_dict["image_tensor"]
+        agents = instance_dict["agents"]
+        past_window = instance_dict["past_window"]
+        future_window = instance_dict["future_window"]
+
+        succeeded = False
+        for trial in range(n_tries_per_instance):
+            try:
+                simulate_occlusions(
+                    config=sim_config,
+                    image_tensor=img_tensor,
+                    agents=agents,
+                    past_window=past_window,
+                    future_window=future_window
+                )
+                succeeded = True
+            except:
+                pass
+
+        if not succeeded:
+            errors += 1
+
+    print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
+
+
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     from time import time
     print(f"Checking polygon generation timing: {n_iterations} iterations\n")
@@ -495,15 +535,19 @@ def main():
 
     dataset = StanfordDroneDataset(config_dict=config)
 
-    # instance_idx = 7592
+    runsim_on_entire_dataset(dataset, config["occlusion_simulator"])
+
+    print(zblu)
+
+    ##################################################################################################################
+    instance_idx = 7592
+    # instance_idx = 36371
     # instance_idx = np.random.randint(len(dataset))
-    instance_idx = 36371
     print(f"dataset.__getitem__({instance_idx})")
     instance_dict = dataset.__getitem__(instance_idx)
 
     fig, ax = plt.subplots()
     sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
-    plt.show()
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
     sim_params = config["occlusion_simulator"]
@@ -521,6 +565,7 @@ def main():
     )
 
     sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
+    ##################################################################################################################
 
 
 if __name__ == '__main__':
