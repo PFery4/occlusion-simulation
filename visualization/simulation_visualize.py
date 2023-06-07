@@ -188,20 +188,6 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     p1s = [occluder[0] for occluder in occluders]
     p2s = [occluder[1] for occluder in occluders]
 
-    gs_kw = dict(wspace=0.1, hspace=0.1)
-    fig, axs = plt.subplots(nrows=2, ncols=3, gridspec_kw=gs_kw)
-    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict, lgnd=False)
-     for ax in axs.reshape(-1)[:-1]]
-    sdd_visualize.visualize_training_instance(axs[1, 2], instance_dict=instance_dict)
-    plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
-    plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
-                           targets_fullobs_regions, p_occls, p_disoccls)
-    plot_simulation_step_3(axs[0, 2], yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
-                           ego_buffer, p1_area)
-    plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, p1_triangles, p1s, p1_visipolys, p2_area)
-    plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
-    plot_simulation_step_6(axs[1, 2], p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
-
     # I. agent buffers & frame_box
     fig1, ax1 = plt.subplots()
     sdd_visualize.visualize_training_instance(ax1, instance_dict=instance_dict)
@@ -233,6 +219,21 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     fig6, ax6 = plt.subplots()
     sdd_visualize.visualize_training_instance(ax6, instance_dict=instance_dict)
     plot_simulation_step_6(ax6, p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
+
+    # Everything in one picture
+    gs_kw = dict(wspace=0.1, hspace=0.1)
+    fig, axs = plt.subplots(nrows=2, ncols=3, gridspec_kw=gs_kw)
+    [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict, lgnd=False)
+     for ax in axs.reshape(-1)[:-1]]
+    sdd_visualize.visualize_training_instance(axs[1, 2], instance_dict=instance_dict)
+    plot_simulation_step_1(axs[0, 0], agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
+    plot_simulation_step_2(axs[0, 1], agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
+                           targets_fullobs_regions, p_occls, p_disoccls)
+    plot_simulation_step_3(axs[0, 2], yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers,
+                           ego_buffer, p1_area)
+    plot_simulation_step_4(axs[1, 0], p_occls, p_disoccls, ego_point, p1_triangles, p1s, p1_visipolys, p2_area)
+    plot_simulation_step_5(axs[1, 1], p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
+    plot_simulation_step_6(axs[1, 2], p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
     plt.show()
 
