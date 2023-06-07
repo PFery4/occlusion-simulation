@@ -14,3 +14,5 @@ fi
 echo "PYTHONPATH variable is:"
 echo $PYTHONPATH
 
+conda activate occl-pred
+
