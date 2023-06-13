@@ -224,6 +224,61 @@ def generate_occlusion_timesteps(
     return occlusion_windows
 
 
+def instantaneous_visibility_polygons(
+        agents: List[StanfordDroneAgent],
+        target_agent_indices: List[int],
+        agent_radius: float,
+        interp_dt: float,
+        time_window: np.array,
+        boundary: sg.Polygon
+) -> List[sg.PolygonSet]:
+    # TODO: ONLY AS AN OPTIONAL IMPROVEMENT IF WE HAVE NOTHING TO DO AT SOME POINT.
+    # TODO: Maybe improve for better runtime (by linetracing for t=-T_obs and t=0, then buffering with -d_agent using
+    # TODO: shapely. This prevents the necessity to compute the visibility polygon at every timestep.
+    all_trajs = [agent.get_traj_section(time_window) for agent in agents]
+    interps_x = [interp1d(time_window, traj[:, 0]) for traj in all_trajs]
+    interps_y = [interp1d(time_window, traj[:, 1]) for traj in all_trajs]
+    interp_time = np.arange(time_window[0], time_window[-1], interp_dt)
+
+    # print(time_window)
+    # print(interp_time)
+    # print(all_trajs[0])
+    # print(interps_x[0])
+    # print(interps_y[0])
+    # print(interps_x[0](interp_time[4]))
+
+    target_visipolys = []
+
+    for idx in target_agent_indices:
+        other_interps_x = interps_x.copy()
+        other_interps_x.pop(idx)
+        other_interps_y = interps_y.copy()
+        other_interps_y.pop(idx)
+
+        agent_visipoly = []
+
+        for t in interp_time:
+
+            scene_segments = list(boundary.edges)
+            for interp_x, interp_y in zip(other_interps_x, other_interps_y):
+                circ = skgeom_approximate_circle(
+                    sg.Circle2(sg.Point2(interp_x(t), interp_y(t)), sg.FieldNumberType(agent_radius), sg.Sign(1))
+                )
+                scene_segments.extend(list(circ.edges))
+
+            scene_arr = sg.arrangement.Arrangement()
+            [scene_arr.insert(seg) for seg in scene_segments]
+
+            agent_visipoly.append(sg.PolygonSet(visibility_polygon((interps_x[idx](t), interps_y[idx](t)), arrangement=scene_arr)))
+
+        target_visipolys.append(functools.reduce(
+            lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
+            agent_visipoly
+        ))
+
+    return target_visipolys
+
+
 def trajectory_visibility_polygons(
         agents: List[StanfordDroneAgent],
         target_agent_indices: List[int],
@@ -231,6 +286,19 @@ def trajectory_visibility_polygons(
         time_window: np.array,
         boundary: sg.Polygon
 ) -> List[sg.PolygonSet]:
+    """
+    For each target agent, compute the regions in space from which their full trajectory can be observed without
+    obstruction from other agent's trajectories. This is performed by intersecting the visibility polygons for each of
+    that agent's trajectory coordinates, with the occluders being the remaining agents.
+
+    :param agents: the full list of agents present in the scene.
+    :param target_agent_indices: the indices within agents to consider as target agents (and for which to generate a
+    trajectory visibility polygon)
+    :param agent_visipoly_buffers: polygon representation of agents' trajectories (used as occluders)
+    :param time_window: time window to consider for the target agent
+    :param boundary: exterior boundary, necessary to limit the visibility polygon.
+    :return: a list containing the trajectory visibility polygons for each of the target agents
+    """
     trajectory_visipolys = []
     for idx in target_agent_indices:
         traj = agents[idx].get_traj_section(time_window)
@@ -338,6 +406,14 @@ def simulate_occlusions(
         time_window=full_window,
         boundary=scene_boundary
     )
+    # targets_fullobs_regions = instantaneous_visibility_polygons(
+    #     agents=agents,
+    #     target_agent_indices=target_agent_indices,
+    #     agent_radius=r_agents,
+    #     interp_dt=1,
+    #     time_window=past_window,
+    #     boundary=scene_boundary
+    # )
 
     # reducing into a single sg.PolygonSet
     targets_fullobs_regions = functools.reduce(
