@@ -578,71 +578,6 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
     print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
 
 
-def visualize_random_samples(dataset: StanfordDroneDataset, sim_config: dict, nrows: int = 2, ncols: int = 2):
-    gs_kw = dict(wspace=0.1, hspace=0.1)
-    fig, axs = plt.subplots(nrows, ncols, gridspec_kw=gs_kw)
-
-    n_samples = nrows * ncols
-    idx_samples = np.sort(np.random.randint(0, len(dataset), n_samples))
-
-    for i in range(n_samples):
-        row, col = i // ncols, i % ncols
-
-        instance_dict = dataset.__getitem__(idx_samples[i])
-
-        ax_i = axs[row, col]
-
-        sdd_visualize.visualize_training_instance(draw_ax=ax_i, instance_dict=instance_dict)
-
-        img_tensor = instance_dict["image_tensor"]
-        agents = instance_dict["agents"]
-        past_window = instance_dict["past_window"]
-        future_window = instance_dict["future_window"]
-        full_window = np.concatenate((past_window, future_window))
-
-        try:
-            simulation_dict = simulate_occlusions(
-                config=sim_config,
-                image_tensor=img_tensor,
-                agents=agents,
-                past_window=past_window,
-                future_window=future_window
-            )
-
-            target_agent_indices = simulation_dict["target_agent_indices"]
-            occlusion_windows = simulation_dict["occlusion_windows"]
-            ego_point = simulation_dict["ego_point"]
-            occluders = simulation_dict["occluders"]
-            occluded_regions = simulation_dict["occluded_regions"]
-
-            # visualization part
-            p_occls = [agents[idx].position_at_timestep(full_window[occlusion_window[0]])
-                       for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
-            p_disoccls = [agents[idx].position_at_timestep(full_window[occlusion_window[1]])
-                          for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
-            p1s = [occluder[0] for occluder in occluders]
-            p2s = [occluder[1] for occluder in occluders]
-
-            sim_visualize.plot_simulation_step_6(
-                ax=ax_i,
-                p_occls=p_occls,
-                p_disoccls=p_disoccls,
-                ego_point=ego_point,
-                p1s=p1s,
-                p2s=p2s,
-                occluded_regions=occluded_regions
-            )
-
-        except Exception as ex:
-            print(type(ex))
-            print(ex.__dict__)
-            print(ex)
-            ax_i.text(sum(ax_i.get_xlim())/2, sum(ax_i.get_ylim())/2, "FAILED", fontsize=20, c="red", horizontalalignment="center", verticalalignment="center")
-            print()
-
-    plt.show()
-
-
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     from time import time
     print(f"Checking polygon generation timing: {n_iterations} iterations\n")
@@ -681,7 +616,7 @@ def main():
     dataset = StanfordDroneDataset(config_dict=config)
 
     # runsim_on_entire_dataset(dataset, config["occlusion_simulator"])
-    # visualize_random_samples(dataset, config["occlusion_simulator"], 2, 2)
+    sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
 
     ##################################################################################################################
     instance_idx = 7592
