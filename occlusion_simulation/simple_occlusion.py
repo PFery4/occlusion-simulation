@@ -355,34 +355,32 @@ def simulate_occlusions(
     taper_angle = config["target_angle"]
     r_agents = config["r_agents"]
 
+    simulation_dict = {
+        "target_agent_indices": None,
+        "occlusion_windows": None,
+        "frame_box": None,
+        "agent_visipoly_buffers": None,
+        "no_occluder_buffers": None,
+        "no_ego_buffers": None,
+        "no_ego_wedges": None,
+        "targets_fullobs_regions": None,
+        "yes_ego_triangles": None,
+        "ego_point": None,
+        "ego_buffer": None,
+        "p1_area": None,
+        "p1_triangles": None,
+        "p1_visipolys": None,
+        "p2_area": None,
+        "p2_triangles": None,
+        "occluders": None,
+        "occluded_regions": None
+    }
+
     full_window = np.concatenate((past_window, future_window))
-
-    # set safety perimeter around the edges of the scene
-    scene_boundary = default_rectangle(image_tensor.shape[1:])
-    frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border)
-
-    # define agent_buffers, a list of sg.Polygons
-    # corresponding to the past trajectories of every agent, inflated by some small radius (used for computation of
-    # visibility polygons, in order to place the ego_point)
-    agent_visipoly_buffers = trajectory_buffers(agents, past_window, r_agents)
-
-    # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
-    no_ego_buffers = trajectory_buffers(agents, full_window, d_min_ag_ego)
-    no_ego_buffers = sg.PolygonSet(no_ego_buffers)
-
-    # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agent_indices = select_random_target_agents(agents, past_window, n_targets)
-
-    # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
-    # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
-    # with the target agents' trajectories
-    no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
-        target_agent_no_ego_wedges(scene_boundary, agents[idx].get_traj_section(full_window), d_min_ag_ego, taper_angle)
-        for idx in target_agent_indices
-    ])))
+    simulation_dict["target_agent_indices"] = target_agent_indices
 
     # generate occlusion windows -> List[Tuple[int, int]]
     # each item provides two timesteps for each target agent:
@@ -395,6 +393,36 @@ def simulate_occlusions(
         min_obs=min_obs,
         min_reobs=min_reobs
     )
+    simulation_dict["occlusion_windows"] = occlusion_windows
+
+    # set safety perimeter around the edges of the scene
+    scene_boundary = default_rectangle(image_tensor.shape[1:])
+    frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border)
+    simulation_dict["frame_box"] = frame_box
+
+    # define agent_buffers, a list of sg.Polygons
+    # corresponding to the past trajectories of every agent, inflated by some small radius (used for computation of
+    # visibility polygons, in order to place the ego_point)
+    agent_visipoly_buffers = trajectory_buffers(agents, past_window, r_agents)
+    simulation_dict["agent_visipoly_buffers"] = agent_visipoly_buffers
+
+    # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
+    no_ego_buffers = trajectory_buffers(agents, full_window, d_min_ag_ego)
+    no_ego_buffers = sg.PolygonSet(no_ego_buffers)
+    simulation_dict["no_ego_buffers"] = no_ego_buffers
+
+    # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
+    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
+    simulation_dict["no_occluder_buffers"] = no_occluder_buffers
+
+    # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
+    # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
+    # with the target agents' trajectories
+    no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
+        target_agent_no_ego_wedges(scene_boundary, agents[idx].get_traj_section(full_window), d_min_ag_ego, taper_angle)
+        for idx in target_agent_indices
+    ])))
+    simulation_dict["no_ego_wedges"] = no_ego_wedges
 
     # list: a given item is a sg.PolygonSet, which describes the regions in space from which
     # every timestep of that agent can be directly observed, unobstructed by other agents
@@ -420,6 +448,7 @@ def simulate_occlusions(
         lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
         targets_fullobs_regions
     )
+    simulation_dict["targets_fullobs_regions"] = targets_fullobs_regions
 
     # the regions within which we sample our ego are those within which target agents' full trajectories are
     # observable, minus the boundaries and no_ego_zones we set previously.
@@ -431,13 +460,16 @@ def simulate_occlusions(
             no_ego_buffers.union(no_ego_wedges).union(frame_box)
         )
     )
+    simulation_dict["yes_ego_triangles"] = yes_ego_triangles
 
     # produce an ego_point from yes_ego_triangles
     ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
+    simulation_dict["ego_point"] = ego_point
 
     # COMPUTE OCCLUDERS
     # draw circle around the ego_point
     ego_buffer = shapely_poly_2_skgeom_poly(sp.Point(*ego_point).buffer(d_min_occl_ego))
+    simulation_dict["ego_buffer"] = ego_buffer
 
     # ITERATE OVER TARGET AGENTS
     p1_area = []
@@ -501,6 +533,13 @@ def simulate_occlusions(
 
         occluders.append((p1, p2))
 
+    simulation_dict["p1_area"] = p1_area
+    simulation_dict["p1_triangles"] = p1_triangles
+    simulation_dict["p1_visipolys"] = p1_visipolys
+    simulation_dict["p2_area"] = p2_area
+    simulation_dict["p2_triangles"] = p2_triangles
+    simulation_dict["occluders"] = occluders
+
     ego_visi_arrangement = sg.arrangement.Arrangement()
     [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
      for occluder_coords in occluders]
@@ -508,35 +547,46 @@ def simulate_occlusions(
 
     ego_visipoly = visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
     occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
+    simulation_dict["occluded_regions"] = occluded_regions
 
-    simulation_dict = {
-        "target_agent_indices": target_agent_indices,
-        "occlusion_windows": occlusion_windows,
-        "frame_box": frame_box,
-        "agent_visipoly_buffers": agent_visipoly_buffers,
-        "no_occluder_buffers": no_occluder_buffers,
-        "no_ego_buffers": no_ego_buffers,
-        "no_ego_wedges": no_ego_wedges,
-        "targets_fullobs_regions": targets_fullobs_regions,
-        "yes_ego_triangles": yes_ego_triangles,
-        "ego_point": ego_point,
-        "ego_buffer": ego_buffer,
-        "p1_area": p1_area,
-        "p1_triangles": p1_triangles,
-        "p1_visipolys": p1_visipolys,
-        "p2_area": p2_area,
-        "p2_triangles": p2_triangles,
-        "occluders": occluders,
-        "occluded_regions": occluded_regions
-    }
+    # simulation_dict = {
+    #     "target_agent_indices": target_agent_indices,
+    #     "occlusion_windows": occlusion_windows,
+    #     "frame_box": frame_box,
+    #     "agent_visipoly_buffers": agent_visipoly_buffers,
+    #     "no_occluder_buffers": no_occluder_buffers,
+    #     "no_ego_buffers": no_ego_buffers,
+    #     "no_ego_wedges": no_ego_wedges,
+    #     "targets_fullobs_regions": targets_fullobs_regions,
+    #     "yes_ego_triangles": yes_ego_triangles,
+    #     "ego_point": ego_point,
+    #     "ego_buffer": ego_buffer,
+    #     "p1_area": p1_area,
+    #     "p1_triangles": p1_triangles,
+    #     "p1_visipolys": p1_visipolys,
+    #     "p2_area": p2_area,
+    #     "p2_triangles": p2_triangles,
+    #     "occluders": occluders,
+    #     "occluded_regions": occluded_regions
+    # }
 
     return simulation_dict
 
 
 def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
     # TODO: WIP WIP WIP
-
+    import logging
     from tqdm import tqdm
+
+    # setting up the logger for traceback information of simulation failures
+    logger = logging.getLogger(__name__)
+    c_handler = logging.StreamHandler()
+    c_handler.setLevel(logging.WARNING)
+    f_handler = logging.FileHandler("simulation.log")
+    f_handler.setLevel(logging.INFO)
+
+    # logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
 
     errors = 0
 
@@ -545,9 +595,11 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
     # instances = list(range(len(dataset))) * n_tries_per_instance
     # print(instances)
 
-    print(len(dataset))
+    n_instances = len(dataset)
+    n_instances = 500      # todo: remove once done debugging
+    print(f"Running Simulator over {n_instances} individual instances")
 
-    for idx in (pbar := tqdm(range(len(dataset)))):
+    for idx in (pbar := tqdm(range(n_instances))):
 
         pbar.set_description(f"ERRORS: {errors}")
 
@@ -558,7 +610,6 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
         past_window = instance_dict["past_window"]
         future_window = instance_dict["future_window"]
 
-        succeeded = False
         for trial in range(n_tries_per_instance):
             try:
                 simulate_occlusions(
@@ -568,12 +619,9 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
                     past_window=past_window,
                     future_window=future_window
                 )
-                succeeded = True
-            except:
-                pass
-
-        if not succeeded:
-            errors += 1
+            except Exception as e:
+                errors += 1
+                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
     print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
 
@@ -615,35 +663,35 @@ def main():
 
     dataset = StanfordDroneDataset(config_dict=config)
 
-    # runsim_on_entire_dataset(dataset, config["occlusion_simulator"])
-    sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
+    runsim_on_entire_dataset(dataset, config["occlusion_simulator"])
+    # sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
 
     ##################################################################################################################
-    instance_idx = 7592
-    # instance_idx = 36371
-    # instance_idx = np.random.randint(len(dataset))
-    print(f"dataset.__getitem__({instance_idx})")
-    instance_dict = dataset.__getitem__(instance_idx)
-
-    fig, ax = plt.subplots()
-    sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
-
-    # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
-    sim_params = config["occlusion_simulator"]
-    img_tensor = instance_dict["image_tensor"]
-    agents = instance_dict["agents"]
-    past_window = instance_dict["past_window"]
-    future_window = instance_dict["future_window"]
-
-    simulation_outputs = simulate_occlusions(
-        config=sim_params,
-        image_tensor=img_tensor,
-        agents=agents,
-        past_window=past_window,
-        future_window=future_window
-    )
-
-    sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
+    # instance_idx = 7592
+    # # instance_idx = 36371
+    # # instance_idx = np.random.randint(len(dataset))
+    # print(f"dataset.__getitem__({instance_idx})")
+    # instance_dict = dataset.__getitem__(instance_idx)
+    #
+    # fig, ax = plt.subplots()
+    # sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
+    #
+    # # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
+    # sim_params = config["occlusion_simulator"]
+    # img_tensor = instance_dict["image_tensor"]
+    # agents = instance_dict["agents"]
+    # past_window = instance_dict["past_window"]
+    # future_window = instance_dict["future_window"]
+    #
+    # simulation_outputs = simulate_occlusions(
+    #     config=sim_params,
+    #     image_tensor=img_tensor,
+    #     agents=agents,
+    #     past_window=past_window,
+    #     future_window=future_window
+    # )
+    #
+    # sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
     ##################################################################################################################
 
 
