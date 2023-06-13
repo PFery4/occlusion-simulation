@@ -612,7 +612,7 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
 
         for trial in range(n_tries_per_instance):
             try:
-                simulate_occlusions(
+                simdict = simulate_occlusions(
                     config=sim_config,
                     image_tensor=img_tensor,
                     agents=agents,
