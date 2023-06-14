@@ -573,19 +573,26 @@ def simulate_occlusions(
     return simulation_dict
 
 
-def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
-    # TODO: WIP WIP WIP
+def runsim_on_entire_dataset() -> None:
+    import json
+    import os.path
+    import pickle
+    import pandas as pd
     import logging
     from tqdm import tqdm
 
+    # TODO: WIP WIP WIP
+
+    config = sdd_extract.get_config()
+    dataset = StanfordDroneDataset(config_dict=config)
+
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)
-    c_handler = logging.StreamHandler()
-    c_handler.setLevel(logging.WARNING)
+    # c_handler = logging.StreamHandler()
+    # c_handler.setLevel(logging.WARNING)
+    # logger.addHandler(c_handler)
     f_handler = logging.FileHandler("simulation.log")
     f_handler.setLevel(logging.INFO)
-
-    # logger.addHandler(c_handler)
     logger.addHandler(f_handler)
 
     errors = 0
@@ -596,8 +603,11 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
     # print(instances)
 
     n_instances = len(dataset)
-    n_instances = 500      # todo: remove once done debugging
+    n_instances = 50      # todo: remove once done debugging
     print(f"Running Simulator over {n_instances} individual instances")
+    occlusion_df = pd.DataFrame(
+        columns=["scene", "video", "timestep", "ego_point", "occluders", "target_agent_indices", "occlusion_windows"]
+    )
 
     for idx in (pbar := tqdm(range(n_instances))):
 
@@ -605,6 +615,9 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
 
         instance_dict = dataset.__getitem__(idx)
 
+        scene = instance_dict["scene"]
+        video = instance_dict["video"]
+        timestep = instance_dict["timestep"]
         img_tensor = instance_dict["image_tensor"]
         agents = instance_dict["agents"]
         past_window = instance_dict["past_window"]
@@ -613,17 +626,48 @@ def runsim_on_entire_dataset(dataset: StanfordDroneDataset, sim_config: dict):
         for trial in range(n_tries_per_instance):
             try:
                 simdict = simulate_occlusions(
-                    config=sim_config,
+                    config=config["occlusion_simulator"],
                     image_tensor=img_tensor,
                     agents=agents,
                     past_window=past_window,
                     future_window=future_window
                 )
+
+                occlusion_df.loc[len(occlusion_df)] = {
+                    "scene": scene,
+                    "video": video,
+                    "timestep": timestep,
+                    "ego_point": simdict["ego_point"],
+                    "occluders": simdict["occluders"],
+                    "target_agent_indices": simdict["target_agent_indices"],
+                    "occlusion_windows": simdict["occlusion_windows"]
+                }
+
             except Exception as e:
                 errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
     print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
+
+    # save the simulation dataframe and configuration dictionary to appropriate pickle and json files
+    sim_save_name = f"{dataset.pickle_id}_sim"
+    pkl_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.pickle")
+    json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
+
+    if os.path.exists(pkl_path):
+        print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
+        os.remove(pkl_path)
+    if os.path.exists(json_path):
+        print(f"\nRemoving simulation config file (already exists):\n{json_path}\n")
+        os.remove(json_path)
+
+    print(f"Saving simulation table to:\n{pkl_path}")
+    with open(pkl_path, "wb") as f:
+        pickle.dump((occlusion_df), f)
+
+    print(f"Saving simulation config to:\n{json_path}")
+    with open(json_path, "w", encoding="utf8") as f:
+        json.dump(config["occlusion_simulator"], f, indent=4)
 
 
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
@@ -658,42 +702,40 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     print(f"default rectangle: {time() - before}")
 
 
-def main():
+def show_simulation():
     config = sdd_extract.get_config()
-
     dataset = StanfordDroneDataset(config_dict=config)
 
-    runsim_on_entire_dataset(dataset, config["occlusion_simulator"])
-    # sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
+    # showing the simulation process of some desired instance
+    instance_idx = 7592
+    # instance_idx = 36371
+    # instance_idx = np.random.randint(len(dataset))
+    print(f"dataset.__getitem__({instance_idx})")
+    instance_dict = dataset.__getitem__(instance_idx)
 
-    ##################################################################################################################
-    # instance_idx = 7592
-    # # instance_idx = 36371
-    # # instance_idx = np.random.randint(len(dataset))
-    # print(f"dataset.__getitem__({instance_idx})")
-    # instance_dict = dataset.__getitem__(instance_idx)
-    #
-    # fig, ax = plt.subplots()
-    # sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
-    #
-    # # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
-    # sim_params = config["occlusion_simulator"]
-    # img_tensor = instance_dict["image_tensor"]
-    # agents = instance_dict["agents"]
-    # past_window = instance_dict["past_window"]
-    # future_window = instance_dict["future_window"]
-    #
-    # simulation_outputs = simulate_occlusions(
-    #     config=sim_params,
-    #     image_tensor=img_tensor,
-    #     agents=agents,
-    #     past_window=past_window,
-    #     future_window=future_window
-    # )
-    #
-    # sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
-    ##################################################################################################################
+    fig, ax = plt.subplots()
+    sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
+
+    # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
+    sim_params = config["occlusion_simulator"]
+    img_tensor = instance_dict["image_tensor"]
+    agents = instance_dict["agents"]
+    past_window = instance_dict["past_window"]
+    future_window = instance_dict["future_window"]
+
+    simulation_outputs = simulate_occlusions(
+        config=sim_params,
+        image_tensor=img_tensor,
+        agents=agents,
+        past_window=past_window,
+        future_window=future_window
+    )
+    sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
+
+    # Showing the simulation outputs of some random instances
+    sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
 
 
 if __name__ == '__main__':
-    main()
+    # show_simulation()
+    runsim_on_entire_dataset()
