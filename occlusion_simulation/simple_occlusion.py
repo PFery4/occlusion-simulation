@@ -334,9 +334,33 @@ def triangulate_polyset(polyset: sg.PolygonSet) -> List[sg.Polygon]:
     return [shapely_poly_2_skgeom_poly(triangle) for triangle in triangles]
 
 
-def verify_target_agents_occlusion_pattern():
-    # todo
-    print("HERE WE GO, LET'S CHECK THAT")
+def verify_target_agents_occlusion_pattern(
+        visibility_polygon: sg.Polygon,
+        full_window: np.array,
+        agents: List[StanfordDroneAgent],
+        target_agent_indices: List[int],
+        occlusion_windows: List[Tuple[int, int]],
+):
+    """
+    for each target agent, verify that the agent follows the occlusion pattern visible -> occluded -> visible, according
+    to the selected occlusion windows.
+    """
+    patterns_correct = []
+    for target_idx, occl_window in zip(target_agent_indices, occlusion_windows):
+        visi_pattern_expected = np.ones_like(full_window)
+        visi_pattern_expected[occl_window[0]+1:occl_window[1]] = 0
+        visi_pattern_expected = visi_pattern_expected.astype(bool)
+
+        agent = agents[target_idx]
+        fulltraj = agent.get_traj_section(full_window)
+        visi_pattern_sim = np.array(
+            [visibility_polygon.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
+             for point in fulltraj], dtype=bool
+        )
+
+        pattern_correct = all(visi_pattern_sim == visi_pattern_expected)
+        patterns_correct.append(pattern_correct)
+    return patterns_correct
 
 
 def simulate_occlusions(
@@ -555,8 +579,15 @@ def simulate_occlusions(
     simulation_dict["occluded_regions"] = occluded_regions
 
     # verify we do obtain the desired observable -> occluded -> observable pattern
-    verify_target_agents_occlusion_pattern()
-    print(zblu)
+    occlusion_patterns_correct = verify_target_agents_occlusion_pattern(
+        visibility_polygon=ego_visipoly,
+        full_window=full_window,
+        agents=agents,
+        target_agent_indices=target_agent_indices,
+        occlusion_windows=occlusion_windows
+    )
+    if not all(occlusion_patterns_correct):
+        raise AssertionError("occlusion pattern incorrect")
 
     # simulation_dict = {
     #     "target_agent_indices": target_agent_indices,
