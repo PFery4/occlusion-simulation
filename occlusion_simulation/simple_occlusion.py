@@ -638,19 +638,20 @@ def runsim_on_entire_dataset() -> None:
     logger.addHandler(f_handler)
 
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
-
     n_instances = len(dataset)
-    n_instances = 50      # todo: remove once done debugging
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
                  "occluders", "target_agent_indices", "occlusion_windows"]
     )
 
-    errors = 0
+    value_errors = 0
+    runtime_errors = 0
+    assert_errors = 0
+    other_errors = 0
     for idx in (pbar := tqdm(range(n_instances))):
 
-        pbar.set_description(f"ERRORS: {errors}")
+        pbar.set_description(f"ERRORS: v: {value_errors}, r: {runtime_errors}, a: {assert_errors}, o: {other_errors}")
 
         instance_dict = dataset.__getitem__(idx)
 
@@ -682,12 +683,21 @@ def runsim_on_entire_dataset() -> None:
                     "target_agent_indices": simdict["target_agent_indices"],
                     "occlusion_windows": simdict["occlusion_windows"]
                 }
-
+            except ValueError as e:
+                value_errors += 1
+                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
+            except RuntimeError as e:
+                runtime_errors += 1
+                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
+            except AssertionError as e:
+                assert_errors += 1
+                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
             except Exception as e:
-                errors += 1
+                other_errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
-    print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
+    total_errors = value_errors + runtime_errors + assert_errors + other_errors
+    print(f"TOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)")
 
     # setting the indices for easy lookup, and sorting the dataframe
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
