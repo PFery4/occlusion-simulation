@@ -606,7 +606,8 @@ def runsim_on_entire_dataset() -> None:
     n_instances = 50      # todo: remove once done debugging
     print(f"Running Simulator over {n_instances} individual instances")
     occlusion_df = pd.DataFrame(
-        columns=["scene", "video", "timestep", "ego_point", "occluders", "target_agent_indices", "occlusion_windows"]
+        columns=["scene", "video", "timestep", "trial", "ego_point",
+                 "occluders", "target_agent_indices", "occlusion_windows"]
     )
 
     for idx in (pbar := tqdm(range(n_instances))):
@@ -637,6 +638,7 @@ def runsim_on_entire_dataset() -> None:
                     "scene": scene,
                     "video": video,
                     "timestep": timestep,
+                    "trial": trial,
                     "ego_point": simdict["ego_point"],
                     "occluders": simdict["occluders"],
                     "target_agent_indices": simdict["target_agent_indices"],
@@ -648,6 +650,10 @@ def runsim_on_entire_dataset() -> None:
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
     print(f"TOTAL NUMBER OF ERRORS: {errors} ({errors/len(dataset)*100}%)")
+
+    # setting the indices for easy lookup, and sorting the dataframe
+    occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
+    occlusion_df.sort_index(inplace=True)
 
     # save the simulation dataframe and configuration dictionary to appropriate pickle and json files
     sim_save_name = f"{dataset.pickle_id}_sim"
