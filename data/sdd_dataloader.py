@@ -46,8 +46,11 @@ class StanfordDroneDataset(Dataset):
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        found_path = self.find_pickle(config_dict["dataset"]["pickle_path"])
-        if found_path:
+        self.pickle_id = self.find_pickle_id(config_dict["dataset"]["pickle_path"])
+
+        if self.pickle_id:
+            found_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}.pickle")
+            assert os.path.exists(found_path)
             print(f"Loading dataloader from:\n{found_path}")
             self.frames, self.lookuptable = self.load_data(found_path)
         else:
@@ -127,7 +130,9 @@ class StanfordDroneDataset(Dataset):
             self.frames.set_index(["scene", "video"], inplace=True)
             self.frames.sort_index(inplace=True)
 
-            self.save_data(config_dict["dataset"]["pickle_path"])
+            # generate unique file name for our saved pickle and json files
+            self.pickle_id = str(uuid.uuid4())
+            self.save_data(config_dict["dataset"]["pickle_path"], self.pickle_id)
 
     def __len__(self):
         return len(self.lookuptable)
@@ -178,6 +183,7 @@ class StanfordDroneDataset(Dataset):
         instance_dict = {
             "scene": scene,
             "video": video,
+            "timestep": lookup["timestep"],
             "agents": agents,
             "past_window": window[:self.T_obs],
             "future_window": window[self.T_obs:],
@@ -203,7 +209,7 @@ class StanfordDroneDataset(Dataset):
         }
         return metadata_dict
 
-    def find_pickle(self, search_dir):
+    def find_pickle_id(self, search_dir):
         """
         looks for a pickle file with same corresponding metadata as self.metadata_dict()
         :param search_dir: the directory within which to look
@@ -215,17 +221,14 @@ class StanfordDroneDataset(Dataset):
         for jsonfile in json_files:
             with open(jsonfile) as f:
                 if json.load(f) == self.metadata_dict():
-                    return f"{os.path.splitext(jsonfile)[0]}.pickle"
+                    return f"{os.path.splitext(os.path.basename(jsonfile))[0]}"
         return None
 
-    def save_data(self, path):
+    def save_data(self, path, save_name):
         """
         saves self.frames and self.lookuptable into a pickle file, and the corresponding parameters as a json
         :return: None
         """
-        # generate unique file name for our saved pickle and json files
-        save_name = str(uuid.uuid4())
-
         # save lookuptable and frames to a pickle
         with open(os.path.join(path, f"{save_name}.pickle"), "wb") as f:
             pickle.dump((self.frames, self.lookuptable), f)
