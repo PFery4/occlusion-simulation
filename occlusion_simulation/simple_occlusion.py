@@ -334,6 +334,11 @@ def triangulate_polyset(polyset: sg.PolygonSet) -> List[sg.Polygon]:
     return [shapely_poly_2_skgeom_poly(triangle) for triangle in triangles]
 
 
+def verify_target_agents_occlusion_pattern():
+    # todo
+    print("HERE WE GO, LET'S CHECK THAT")
+
+
 def simulate_occlusions(
         config: dict,
         image_tensor: torch.Tensor,
@@ -549,6 +554,10 @@ def simulate_occlusions(
     occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
     simulation_dict["occluded_regions"] = occluded_regions
 
+    # verify we do obtain the desired observable -> occluded -> observable pattern
+    verify_target_agents_occlusion_pattern()
+    print(zblu)
+
     # simulation_dict = {
     #     "target_agent_indices": target_agent_indices,
     #     "occlusion_windows": occlusion_windows,
@@ -581,9 +590,11 @@ def runsim_on_entire_dataset() -> None:
     import logging
     from tqdm import tqdm
 
-    # TODO: WIP WIP WIP
-
     config = sdd_extract.get_config()
+
+    # setting the random seed (for reproducibility)
+    np.random.seed(config["occlusion_simulator"]["rng_seed"])
+
     dataset = StanfordDroneDataset(config_dict=config)
 
     # setting up the logger for traceback information of simulation failures
@@ -595,21 +606,17 @@ def runsim_on_entire_dataset() -> None:
     f_handler.setLevel(logging.INFO)
     logger.addHandler(f_handler)
 
-    errors = 0
-
-    # todo: figure out an effective way to iterate multiple times over the same instance in order to produce multiple occlusion scenarios
-    n_tries_per_instance = 3
-    # instances = list(range(len(dataset))) * n_tries_per_instance
-    # print(instances)
+    n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
 
     n_instances = len(dataset)
     n_instances = 50      # todo: remove once done debugging
-    print(f"Running Simulator over {n_instances} individual instances")
+    print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
                  "occluders", "target_agent_indices", "occlusion_windows"]
     )
 
+    errors = 0
     for idx in (pbar := tqdm(range(n_instances))):
 
         pbar.set_description(f"ERRORS: {errors}")
@@ -624,7 +631,7 @@ def runsim_on_entire_dataset() -> None:
         past_window = instance_dict["past_window"]
         future_window = instance_dict["future_window"]
 
-        for trial in range(n_tries_per_instance):
+        for trial in range(n_sim_per_instance):
             try:
                 simdict = simulate_occlusions(
                     config=config["occlusion_simulator"],
