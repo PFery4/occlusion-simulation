@@ -3,3 +3,4 @@
 results
 config.yaml
 data/pickled_dataloaders
+**/*.log
