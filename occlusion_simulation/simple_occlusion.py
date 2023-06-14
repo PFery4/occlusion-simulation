@@ -639,6 +639,7 @@ def runsim_on_entire_dataset() -> None:
 
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
     n_instances = len(dataset)
+    n_instances = 1000
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
@@ -697,7 +698,13 @@ def runsim_on_entire_dataset() -> None:
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
     total_errors = value_errors + runtime_errors + assert_errors + other_errors
-    print(f"TOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)")
+    end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)\n" \
+              f"ValueError: {value_errors}\n" \
+              f"RuntimeError: {runtime_errors}\n" \
+              f"AssertionError: {assert_errors}\n" \
+              f"Other: {other_errors}\n\n"
+    print(end_msg)
+    logger.info(end_msg)
 
     # setting the indices for easy lookup, and sorting the dataframe
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
