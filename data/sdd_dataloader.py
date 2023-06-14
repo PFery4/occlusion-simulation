@@ -124,7 +124,7 @@ class StanfordDroneDataset(Dataset):
                     frames.append(annot_df)
                     # scene_keys.append(scene_key)
 
-            self.lookuptable.set_index(["scene", "video"], inplace=True)
+            self.lookuptable.set_index(["scene", "video"], inplace=True)     # todo: maybe add 'timestep' in the index
             self.lookuptable.sort_index(inplace=True)
             self.frames = pd.concat(frames)
             self.frames.set_index(["scene", "video"], inplace=True)
@@ -248,6 +248,44 @@ class StanfordDroneDataset(Dataset):
             return pickle.load(f)
 
 
+class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
+    def __init__(self, config_dict):
+        super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
+
+        sim_pkl_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}_sim.pickle")
+        sim_json_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}_sim.json")
+        print(f"{sim_pkl_path=}")
+        print(f"{sim_json_path=}")
+
+        assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path),\
+            "Simulation pickle and json files not found, " \
+            "please run the occlusion simulation and verify that the corresponding files have been saved"
+
+        self.occlusion_table = self.load_data(sim_pkl_path)
+
+        print(self.occlusion_table.head())
+
+    def __len__(self):
+        return len(self.occlusion_table)
+
+    def __getitem__(self, idx):
+        # lookup the row in self.occlusion_table
+        occlusion_case = self.occlusion_table.iloc[idx]
+
+        scene, video, timestep, trial = occlusion_case.name
+
+        # find the corresponding index in self.lookuptable
+        lookup_idx = self.find_idx(scene=scene, video=video, timestep=timestep)
+
+        instance_dict = super(StanfordDroneDatasetWithOcclusionSim, self).__getitem__(lookup_idx)
+
+        instance_dict["ego_point"] = occlusion_case["ego_point"]
+        instance_dict["occluders"] = occlusion_case["occluders"]
+        instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
+        instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
+        return instance_dict
+
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import time
@@ -295,3 +333,9 @@ if __name__ == '__main__':
     # [print(dataset.__getitem__(idx)["video"]) for idx in indices]
     # [print(dataset.__getitem__(idx)["agent_ids"]) for idx in indices]
     # [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
+
+    ##################################################################################################################
+    # dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    # print(f"{len(dataset)=}")
+    # print(f"{dataset.__getitem__(4)=}")
+
