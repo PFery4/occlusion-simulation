@@ -270,7 +270,7 @@ def visualize_random_simulation_samples(
         try:
             simulation_dict = simulate_occlusions(
                 config=sim_config,
-                image_tensor=img_tensor,
+                image_res=tuple(img_tensor.shape[1:]),
                 agents=agents,
                 past_window=past_window,
                 future_window=future_window
@@ -302,7 +302,6 @@ def visualize_random_simulation_samples(
 
         except Exception as ex:
             print(type(ex))
-            print(ex.__dict__)
             print(ex)
             ax_i.text(sum(ax_i.get_xlim())/2, sum(ax_i.get_ylim())/2, "FAILED", fontsize=20, c="red", horizontalalignment="center", verticalalignment="center")
             print()

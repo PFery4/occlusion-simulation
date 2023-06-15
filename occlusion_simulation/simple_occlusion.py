@@ -5,7 +5,6 @@ import shapely.ops as spops
 import skgeom as sg
 import functools
 import itertools
-import torch
 from scipy.interpolate import interp1d
 from typing import List, Tuple, Union
 import data.sdd_extract as sdd_extract
@@ -365,7 +364,7 @@ def verify_target_agents_occlusion_pattern(
 
 def simulate_occlusions(
         config: dict,
-        image_tensor: torch.Tensor,
+        image_res: Tuple[int, int],
         agents: List[StanfordDroneAgent],
         past_window: np.array,
         future_window: np.array
@@ -425,8 +424,9 @@ def simulate_occlusions(
     simulation_dict["occlusion_windows"] = occlusion_windows
 
     # set safety perimeter around the edges of the scene
-    scene_boundary = default_rectangle(image_tensor.shape[1:])
-    frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border)
+    d_border_px = int((d_border/100 * np.linalg.norm(image_res)) // 10 * 11)
+    scene_boundary = default_rectangle(image_res)
+    frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border_px)
     simulation_dict["frame_box"] = frame_box
 
     # define agent_buffers, a list of sg.Polygons
@@ -668,7 +668,7 @@ def runsim_on_entire_dataset() -> None:
             try:
                 simdict = simulate_occlusions(
                     config=config["occlusion_simulator"],
-                    image_tensor=img_tensor,
+                    image_res=tuple(img_tensor.shape[:1]),
                     agents=agents,
                     past_window=past_window,
                     future_window=future_window
@@ -786,7 +786,7 @@ def show_simulation():
 
     simulation_outputs = simulate_occlusions(
         config=sim_params,
-        image_tensor=img_tensor,
+        image_res=tuple(img_tensor.shape[1:]),
         agents=agents,
         past_window=past_window,
         future_window=future_window
@@ -798,5 +798,5 @@ def show_simulation():
 
 
 if __name__ == '__main__':
-    # show_simulation()
-    runsim_on_entire_dataset()
+    show_simulation()
+    # runsim_on_entire_dataset()
