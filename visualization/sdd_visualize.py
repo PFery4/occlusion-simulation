@@ -177,8 +177,42 @@ def visualize_full_trajectories_on_all_scenes():
                 plt.close()
 
 
+def get_video_resolutions():
+    config = sdd_extract.get_config()
+    data_dir = os.path.join(config["dataset"]["path"], "annotations")
+    print(data_dir)
+    assert os.path.exists(data_dir)
+
+    whds = []
+    counter = 0
+    for dir in os.scandir(data_dir):
+        for video in os.scandir(dir):
+            file = os.path.join(video, "reference.jpg")
+            assert os.path.exists(file)
+            counter+=1
+            with open(file, "rb") as img_file:
+                img_file.seek(163)
+
+                a = img_file.read(2)
+                height = (a[0] << 8) + a[1]
+                a = img_file.read(2)
+                width = (a[0] << 8) + a[1]
+
+                print(f"{os.path.basename(file)}: {width} x {height}")
+
+                whds.append((width, height, np.sqrt(width**2 + height**2)))
+
+    whds = list(dict.fromkeys(whds))
+
+    print(f"All different resolutions:")
+    [print(wh) for wh in whds]
+    print(counter)
+    print(len(whds))
+
+
 def main():
-    visualize_full_trajectories_on_all_scenes()
+    # visualize_full_trajectories_on_all_scenes()
+    get_video_resolutions()
 
 
 if __name__ == '__main__':
