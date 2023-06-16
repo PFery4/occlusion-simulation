@@ -111,9 +111,7 @@ def subsample_timesteps_from(annot_df: pd.DataFrame, target_fps: float = 2.5, or
     return annot_df
 
 
-def perform_preprocessing_pipeline(
-        annot_df: pd.DataFrame, agent_types: List[str], target_fps: float = 2.5, orig_fps: float = 30
-):
+def perform_preprocessing_pipeline(annot_df: pd.DataFrame, target_fps: float = 2.5, orig_fps: float = 30):
     """
     performs the entire following preprocessing pipeline on the provided pandas dataframe:
         - removal of every agent not belonging to the classes specified by agent_types
@@ -123,14 +121,11 @@ def perform_preprocessing_pipeline(
         - filters out partially "lost" trajectories according to protocol from Andle et.al.
         - subsamples trajectory positions for a target framerate
     :param annot_df: the dataframe to run the preprocessing on
-    :param agent_types: the agent classes to keep.
-                        must be a subset of ["Pedestrian", "Biker", "Skater", "Car", "Bus", "Cart"]
     :param target_fps: the target fps to sample annotations with
     :param orig_fps: the original annotation fps
     :return: the preprocessed dataframe
     """
 
-    annot_df = annot_df[annot_df["label"].isin(agent_types)]
     annot_df = bool_columns_in(annot_df)
     annot_df = xy_columns_in(annot_df)
     annot_df = completely_lost_trajs_removed_from(annot_df)
