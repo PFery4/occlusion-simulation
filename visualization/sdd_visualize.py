@@ -137,9 +137,12 @@ def visualize_full_trajectories_on_all_scenes():
             # mins, sec = duration // 60, duration % 60
             # print(f"{scene_name.name}, {video_name.name}: {n_timesteps} timesteps ({duration}s: {mins}m, {sec}s)")
 
+            if config_dict["hyperparameters"]["other_agents"] == "OUT":
+                annot_file_df = annot_file_df[
+                    annot_file_df["label"].isin(config_dict["hyperparameters"]["agent_types"])
+                ]
             annot_file_df = sdd_data_processing.perform_preprocessing_pipeline(
                 annot_df=annot_file_df,
-                agent_types=config_dict["hyperparameters"]["agent_types"],
                 target_fps=config_dict["hyperparameters"]["fps"],
                 orig_fps=config_dict["dataset"]["fps"]
             )
