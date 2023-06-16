@@ -21,6 +21,8 @@ def get_config() -> dict:
             # print(config)
         except yaml.YAMLError as exc:
             print(exc)
+    # perform input verifications
+    assert config["hyperparameters"]["other_agents"] in ("IN", "OUT")
     return config
 
 
