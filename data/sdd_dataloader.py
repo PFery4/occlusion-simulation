@@ -122,7 +122,7 @@ class StanfordDroneDataset(Dataset):
                     frames.append(annot_df)
                     # scene_keys.append(scene_key)
 
-            self.lookuptable.set_index(["scene", "video"], inplace=True)     # todo: maybe add 'timestep' in the index
+            self.lookuptable.set_index(["scene", "video", "timestep"], inplace=True)     # todo: maybe add 'timestep' in the index
             self.lookuptable.sort_index(inplace=True)
             self.frames = pd.concat(frames)
             self.frames.set_index(["scene", "video"], inplace=True)
@@ -138,7 +138,7 @@ class StanfordDroneDataset(Dataset):
     def __getitem__(self, idx):
         # lookup the row in self.lookuptable
         lookup = self.lookuptable.iloc[idx]
-        scene, video = lookup.name
+        scene, video, timestep = lookup.name
 
         # extract the reference image
         image_path = os.path.join(self.root, "annotations", scene, video, "reference.jpg")
@@ -148,7 +148,7 @@ class StanfordDroneDataset(Dataset):
         image_tensor = self.img_transform(image)
 
         # generate a window of the timesteps we are interested in extracting from the scene dataset
-        window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + lookup["timestep"]
+        window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + timestep
         # generate subdataframe of the specific video
         scenevideo_df = self.frames.loc[(scene, video)]
 
@@ -181,7 +181,7 @@ class StanfordDroneDataset(Dataset):
         instance_dict = {
             "scene": scene,
             "video": video,
-            "timestep": lookup["timestep"],
+            "timestep": timestep,
             "agents": agents,
             "past_window": window[:self.T_obs],
             "future_window": window[self.T_obs:],
@@ -191,9 +191,8 @@ class StanfordDroneDataset(Dataset):
         return instance_dict
 
     def find_idx(self, scene: str, video: str, timestep: int) -> int:
-        video_slice = self.lookuptable.index.get_loc((scene, video))
-        timestep_index = np.array(*np.where(self.lookuptable[video_slice]["timestep"] == timestep)).item()
-        return int(video_slice.start + timestep_index)
+        video_slice = self.lookuptable.index.get_loc((scene, video, timestep))
+        return int(video_slice)
 
     def metadata_dict(self):
         metadata_dict = {

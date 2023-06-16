@@ -768,8 +768,8 @@ def show_simulation():
     dataset = StanfordDroneDataset(config_dict=config)
 
     # showing the simulation process of some desired instance
-    instance_idx = 7592
-    # instance_idx = 36371
+    instance_idx = 7592     # coupa video0 60
+    # instance_idx = 36371    # nexus video7 3024
     # instance_idx = np.random.randint(len(dataset))
     print(f"dataset.__getitem__({instance_idx})")
     instance_dict = dataset.__getitem__(instance_idx)
