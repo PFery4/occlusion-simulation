@@ -628,12 +628,18 @@ def runsim_on_entire_dataset() -> None:
 
     dataset = StanfordDroneDataset(config_dict=config)
 
+    # save the simulation dataframe and configuration dictionary to appropriate pickle and json files
+    sim_save_name = f"{dataset.pickle_id}_sim"
+    pkl_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.pickle")
+    json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
+    log_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.log")
+
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)
     # c_handler = logging.StreamHandler()
     # c_handler.setLevel(logging.WARNING)
     # logger.addHandler(c_handler)
-    f_handler = logging.FileHandler("simulation.log")
+    f_handler = logging.FileHandler(log_path)
     f_handler.setLevel(logging.INFO)
     logger.addHandler(f_handler)
 
@@ -709,11 +715,6 @@ def runsim_on_entire_dataset() -> None:
     # setting the indices for easy lookup, and sorting the dataframe
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
     occlusion_df.sort_index(inplace=True)
-
-    # save the simulation dataframe and configuration dictionary to appropriate pickle and json files
-    sim_save_name = f"{dataset.pickle_id}_sim"
-    pkl_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.pickle")
-    json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
 
     if os.path.exists(pkl_path):
         print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
@@ -798,5 +799,5 @@ def show_simulation():
 
 
 if __name__ == '__main__':
-    show_simulation()
-    # runsim_on_entire_dataset()
+    # show_simulation()
+    runsim_on_entire_dataset()
