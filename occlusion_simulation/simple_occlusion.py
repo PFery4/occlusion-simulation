@@ -674,7 +674,7 @@ def runsim_on_entire_dataset() -> None:
             try:
                 simdict = simulate_occlusions(
                     config=config["occlusion_simulator"],
-                    image_res=tuple(img_tensor.shape[:1]),
+                    image_res=tuple(img_tensor.shape[1:]),
                     agents=agents,
                     past_window=past_window,
                     future_window=future_window
