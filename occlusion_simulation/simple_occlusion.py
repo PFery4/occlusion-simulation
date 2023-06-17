@@ -664,7 +664,7 @@ def runsim_on_entire_dataset() -> None:
     json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
     log_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.log")
 
-    CLEAR_COLLECTED_DATA = True
+    CLEAR_COLLECTED_DATA = False        # todo: perhaps implement this in a bette way
     if CLEAR_COLLECTED_DATA:
         if os.path.exists(pkl_path):
             print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
@@ -683,7 +683,7 @@ def runsim_on_entire_dataset() -> None:
     logger.addHandler(f_handler)
 
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
-    n_instances = 1000
+    n_instances = len(dataset)
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
