@@ -534,6 +534,7 @@ def simulate_occlusions(
     p2_triangles = []
     occluders = []
 
+    p2_time_window = np.append(full_window, [2 * full_window[-1] - full_window[-2]])  # TODO: fix this, in a better way
     for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
         # occlusion_window = (t_occl, t_disoccl)
 
@@ -569,10 +570,13 @@ def simulate_occlusions(
         p1_visipoly = visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
         p1_visipolys.append(p1_visipoly)
 
+        print(occlusion_window)
+        print(full_window)
+        print(p2_time_window)
         p2_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             agents[idx].position_at_timestep(full_window[occlusion_window[1]]),
-             agents[idx].position_at_timestep(full_window[occlusion_window[1] - 1])]
+             agents[idx].position_at_timestep(p2_time_window[occlusion_window[1]]),         # todo: once fixed, change p2timewindow
+             agents[idx].position_at_timestep(p2_time_window[occlusion_window[1] - 1])]
         ))
         if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p2_ego_traj_triangle.reverse_orientation()
@@ -660,6 +664,15 @@ def runsim_on_entire_dataset() -> None:
     json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
     log_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.log")
 
+    CLEAR_COLLECTED_DATA = True
+    if CLEAR_COLLECTED_DATA:
+        if os.path.exists(pkl_path):
+            print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
+            os.remove(pkl_path)
+        if os.path.exists(json_path):
+            print(f"\nRemoving simulation config file (already exists):\n{json_path}\n")
+            os.remove(json_path)
+
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)
     # c_handler = logging.StreamHandler()
@@ -670,7 +683,6 @@ def runsim_on_entire_dataset() -> None:
     logger.addHandler(f_handler)
 
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
-    n_instances = len(dataset)
     n_instances = 1000
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
@@ -729,6 +741,10 @@ def runsim_on_entire_dataset() -> None:
                 other_errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
+        print(f"Saving simulation table to:\n{pkl_path}")       # TODO: change behaviour to safely append data
+        with open(pkl_path, "wb") as f:
+            pickle.dump((occlusion_df), f)
+
     total_errors = value_errors + runtime_errors + assert_errors + other_errors
     end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)\n" \
               f"ValueError: {value_errors}\n" \
@@ -741,13 +757,6 @@ def runsim_on_entire_dataset() -> None:
     # setting the indices for easy lookup, and sorting the dataframe
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
     occlusion_df.sort_index(inplace=True)
-
-    if os.path.exists(pkl_path):
-        print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
-        os.remove(pkl_path)
-    if os.path.exists(json_path):
-        print(f"\nRemoving simulation config file (already exists):\n{json_path}\n")
-        os.remove(json_path)
 
     print(f"Saving simulation table to:\n{pkl_path}")
     with open(pkl_path, "wb") as f:

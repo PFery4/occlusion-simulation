@@ -162,6 +162,7 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     past_window = instance_dict["past_window"]
     future_window = instance_dict["future_window"]
     full_window = np.concatenate((past_window, future_window))
+    full_window = np.append(full_window, [2 * full_window[-1] - full_window[-2]])       # todo: remove once fixed time window problems
 
     target_agent_indices = simulation_dict["target_agent_indices"]
     occlusion_windows = simulation_dict["occlusion_windows"]
