@@ -115,11 +115,11 @@ def select_random_target_agents(agent_list: List[StanfordDroneAgent], past_windo
     distances = distances[is_moving]
 
     if sum(is_moving) == 0:
-        print("Zero moving agents, no target agent can be selected")
+        # print("Zero moving agents, no target agent can be selected")
         return []
 
     if sum(is_moving) <= n:
-        print(f"returning all available candidates: only {sum(is_moving)} moving agents in the scene")
+        # print(f"returning all available candidates: only {sum(is_moving)} moving agents in the scene")
         return candidate_indices
 
     return list(np.random.choice(candidate_indices, n, replace=False, p=distances/sum(distances)))
@@ -234,46 +234,72 @@ def instantaneous_visibility_polygons(
     # TODO: ONLY AS AN OPTIONAL IMPROVEMENT IF WE HAVE NOTHING TO DO AT SOME POINT.
     # TODO: Maybe improve for better runtime (by linetracing for t=-T_obs and t=0, then buffering with -d_agent using
     # TODO: shapely. This prevents the necessity to compute the visibility polygon at every timestep.
-    all_trajs = [agent.get_traj_section(time_window) for agent in agents]
-    interps_x = [interp1d(time_window, traj[:, 0]) for traj in all_trajs]
-    interps_y = [interp1d(time_window, traj[:, 1]) for traj in all_trajs]
-    interp_time = np.arange(time_window[0], time_window[-1], interp_dt)
-
-    # print(time_window)
-    # print(interp_time)
-    # print(all_trajs[0])
-    # print(interps_x[0])
-    # print(interps_y[0])
-    # print(interps_x[0](interp_time[4]))
-
+    # TODO: WIP WIP WIP, FRAGMENTED VISIPOLYGONS (reason unknown)
     target_visipolys = []
 
     for idx in target_agent_indices:
-        other_interps_x = interps_x.copy()
-        other_interps_x.pop(idx)
-        other_interps_y = interps_y.copy()
-        other_interps_y.pop(idx)
+        other_agents = agents.copy()
+        other_agents.pop(idx)
 
-        agent_visipoly = []
+        target_traj = agents[idx].get_traj_section(time_window)
 
-        for t in interp_time:
+        other_trajs = np.array([agent.get_traj_section(time_window) for agent in other_agents])
+        other_vecs = other_trajs - target_traj
+        other_us = other_vecs / np.sqrt(np.einsum('...i,...i', other_vecs, other_vecs))[..., np.newaxis]
+        out_points = other_trajs + 3000 * other_us
 
-            scene_segments = list(boundary.edges)
-            for interp_x, interp_y in zip(other_interps_x, other_interps_y):
-                circ = skgeom_approximate_circle(
-                    sg.Circle2(sg.Point2(interp_x(t), interp_y(t)), sg.FieldNumberType(agent_radius), sg.Sign(1))
-                )
-                scene_segments.extend(list(circ.edges))
+        # print(target_traj.shape)
+        # print(other_trajs.shape)
+        # print(other_vecs.shape)
+        # print(other_vecs[0])
+        # print(other_us[0])
+        # print(other_us.shape)
+        # print(out_points[0])
+        shifted_points = np.roll(other_trajs, -1, axis=1)
+        other_segments = np.stack([other_trajs, shifted_points], axis=-1).transpose((0, 1, 3, 2))
+        print(other_trajs[0][0])
+        print(shifted_points[0][0])
 
-            scene_arr = sg.arrangement.Arrangement()
-            [scene_arr.insert(seg) for seg in scene_segments]
+        out_shifted = np.roll(out_points, -1, axis=1)
+        out_segments = np.stack([out_points, out_shifted], axis=-1).transpose((0, 1, 3, 2))
+        print(out_points[0][0])
+        print(out_shifted[0][0])
 
-            agent_visipoly.append(sg.PolygonSet(visibility_polygon((interps_x[idx](t), interps_y[idx](t)), arrangement=scene_arr)))
+        poly_block = np.stack([other_trajs, shifted_points, out_shifted, out_points], axis=-1).transpose((0, 1, 3, 2))
+        print(poly_block[0][0])
+        print(poly_block.shape)
+        poly_block = poly_block[:, :-1, :, :]
+        print(poly_block.shape)
 
-        target_visipolys.append(functools.reduce(
-            lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
-            agent_visipoly
-        ))
+        occl_polys = []
+        for other_agent in poly_block:
+            # polygons = [sg.Polygon(np.unique(poly_line, axis=0)) for poly_line in other_agent]
+            polygons = [shapely_poly_2_skgeom_poly(sp.Polygon(np.unique(poly_line, axis=0)).buffer(agent_radius))
+                        for poly_line in other_agent]
+
+            # print(polygons[0])
+            # print(polygons_sp[0])
+            # print(zblu)
+            # [poly.reverse_orientation() for poly in polygons if poly.orientation() == sg.Sign.CLOCKWISE]
+            # [print(poly.orientation()) for poly in polygons]
+            occl_poly = functools.reduce(
+                lambda poly_a, poly_b: sg.boolean_set.join(poly_a, poly_b),
+                polygons
+            )
+            # print(occl_poly)
+            # print(type(occl_poly))
+            occl_polys.append(occl_poly)
+        occl_polys = sg.PolygonSet(occl_polys)
+        visi_poly = sg.PolygonSet(boundary).difference(occl_polys)
+        # print(visi_poly)
+        # print(type(visi_poly))
+        # print(len(visi_poly.polygons))
+        # print(visi_poly.polygons)
+        # print(zblu)
+        target_visipolys.append(visi_poly)
+
+    # print(target_visipolys)
+    # print(zblu)
 
     return target_visipolys
 
@@ -639,7 +665,7 @@ def runsim_on_entire_dataset() -> None:
     # c_handler = logging.StreamHandler()
     # c_handler.setLevel(logging.WARNING)
     # logger.addHandler(c_handler)
-    f_handler = logging.FileHandler(log_path)
+    f_handler = logging.FileHandler(log_path, mode="a")
     f_handler.setLevel(logging.INFO)
     logger.addHandler(f_handler)
 
@@ -799,5 +825,5 @@ def show_simulation():
 
 
 if __name__ == '__main__':
-    # show_simulation()
-    runsim_on_entire_dataset()
+    show_simulation()
+    # runsim_on_entire_dataset()
