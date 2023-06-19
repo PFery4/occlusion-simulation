@@ -100,29 +100,48 @@ def skgeom_extruded_polygon(polygon: sg.Polygon, d_border: float) -> sg.PolygonW
     return functools.reduce(lambda a, b: sg.boolean_set.difference(a, b)[0], skel.offset_polygons(d_border), polygon)
 
 
-def select_random_target_agents(agent_list: List[StanfordDroneAgent], past_window: np.array, n: int = 1) -> List[int]:
+def target_agent_candidate_indices(
+        agent_list: List[StanfordDroneAgent],
+        full_window: np.array,
+        past_window: np.array
+) -> Tuple[List[int], List[float]]:
     """
-    selects a random subset of agents present within the scene. The probability to select any agent is proportional to
-    the distance they travel. n agents will be sampled (possibly fewer if there aren't enough agents).
+    returns a list of candidate agents to be the targets for occlusion simulation, with corresponding sampling
+    probabilities. target agents must be:
+    - in movement
+    - fully observed over the entire full_window
+    """
+
+    # checking that the target agents are fully observed over the entire window
+    # (in practice: [-T_obs:T_pred+1], INCLUDING the +1)
+    fully_observed = np.array([agent.get_traj_section(full_window).shape[0] == full_window.shape[0]
+                               for agent in agent_list])
+
+    # checking that the target agents are moving
+    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in
+                          [agent.get_traj_section(past_window) for agent in agent_list]])
+    moving = (distances > 1e-8)
+    candidates = np.logical_and(fully_observed, moving)
+
+    #todo: add check that all subsequent positions are different
+
+    return list(np.asarray(candidates).nonzero()[0]), list(distances[candidates]/sum(distances[candidates]))
+
+
+def select_random_target_agents(
+        candidate_indices: List[int],
+        sampling_probabilities: List[float],
+        n: int = 1
+) -> List[int]:
+    """
+    selects a random subset of agents present within the scene.
+    n agents will be sampled (possibly fewer if there aren't enough agents).
     the output provides the indices in agent_list pointing at our target agents.
     """
-    # distances travelled by all agents in their past segment
-    pasttrajs = [agent.get_traj_section(past_window) for agent in agent_list]
-    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in pasttrajs])
-    is_moving = (distances > 1e-8)
-
-    candidate_indices = np.asarray(is_moving).nonzero()[0]
-    distances = distances[is_moving]
-
-    if sum(is_moving) == 0:
-        # print("Zero moving agents, no target agent can be selected")
-        return []
-
-    if sum(is_moving) <= n:
+    if n > len(candidate_indices):
         # print(f"returning all available candidates: only {sum(is_moving)} moving agents in the scene")
         return candidate_indices
-
-    return list(np.random.choice(candidate_indices, n, replace=False, p=distances/sum(distances)))
+    return list(np.random.choice(candidate_indices, n, replace=False, p=sampling_probabilities))
 
 
 def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: float, angle: float) -> List[sg.Polygon]:
@@ -430,10 +449,19 @@ def simulate_occlusions(
         "occluded_regions": None
     }
 
-    full_window = np.concatenate((past_window, future_window))
+    # full window contains the past and future timesteps, with an extra timestep after the prediction horizon.
+    # the extra timestep is used to help define the disocclusion point of the target agent, which might happen one
+    # timestep after the full prediction horizon (ie, the target agent makes a reappearance from occlusion only
+    # after T_pred timesteps).
+    full_window = np.concatenate((past_window, future_window, [2 * future_window[-1] - future_window[-2]]))
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
-    target_agent_indices = select_random_target_agents(agents, past_window, n_targets)
+    target_agent_candidates, target_probabilities = target_agent_candidate_indices(agents, full_window, past_window)
+    print(target_agent_candidates, target_probabilities)
+    if len(target_agent_candidates) == 0:
+        raise ValueError("No valid candidates available for occlusion simulation.")
+
+    target_agent_indices = select_random_target_agents(target_agent_candidates, target_probabilities)
     simulation_dict["target_agent_indices"] = target_agent_indices
 
     # generate occlusion windows -> List[Tuple[int, int]]
@@ -462,19 +490,21 @@ def simulate_occlusions(
     simulation_dict["agent_visipoly_buffers"] = agent_visipoly_buffers
 
     # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
-    no_ego_buffers = trajectory_buffers(agents, full_window, d_min_ag_ego)
+    no_ego_buffers = trajectory_buffers(agents, full_window[:-1], d_min_ag_ego)
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
     simulation_dict["no_ego_buffers"] = no_ego_buffers
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(agents, full_window, d_min_occl_ag)
+    no_occluder_buffers = trajectory_buffers(agents, full_window[:-1], d_min_occl_ag)
     simulation_dict["no_occluder_buffers"] = no_occluder_buffers
 
     # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
     # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
     # with the target agents' trajectories
     no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
-        target_agent_no_ego_wedges(scene_boundary, agents[idx].get_traj_section(full_window), d_min_ag_ego, taper_angle)
+        target_agent_no_ego_wedges(
+            scene_boundary, agents[idx].get_traj_section(full_window[:-1]), d_min_ag_ego, taper_angle
+        )
         for idx in target_agent_indices
     ])))
     simulation_dict["no_ego_wedges"] = no_ego_wedges
@@ -486,7 +516,7 @@ def simulate_occlusions(
         agents=agents,
         target_agent_indices=target_agent_indices,
         agent_visipoly_buffers=agent_visipoly_buffers,
-        time_window=full_window,
+        time_window=full_window[:-1],
         boundary=scene_boundary
     )
     # targets_fullobs_regions = instantaneous_visibility_polygons(
@@ -534,7 +564,6 @@ def simulate_occlusions(
     p2_triangles = []
     occluders = []
 
-    p2_time_window = np.append(full_window, [2 * full_window[-1] - full_window[-2]])  # TODO: fix this, in a better way
     for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
         # occlusion_window = (t_occl, t_disoccl)
 
@@ -570,13 +599,10 @@ def simulate_occlusions(
         p1_visipoly = visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
         p1_visipolys.append(p1_visipoly)
 
-        print(occlusion_window)
-        print(full_window)
-        print(p2_time_window)
         p2_ego_traj_triangle = sg.Polygon(np.array(
             [ego_point,
-             agents[idx].position_at_timestep(p2_time_window[occlusion_window[1]]),         # todo: once fixed, change p2timewindow
-             agents[idx].position_at_timestep(p2_time_window[occlusion_window[1] - 1])]
+             agents[idx].position_at_timestep(full_window[occlusion_window[1]]),
+             agents[idx].position_at_timestep(full_window[occlusion_window[1] - 1])]
         ))
         if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
             p2_ego_traj_triangle.reverse_orientation()
@@ -611,7 +637,7 @@ def simulate_occlusions(
     # verify we do obtain the desired observable -> occluded -> observable pattern
     occlusion_patterns_correct = verify_target_agents_occlusion_pattern(
         visibility_polygon=ego_visipoly,
-        full_window=full_window,
+        full_window=full_window[:-1],
         agents=agents,
         target_agent_indices=target_agent_indices,
         occlusion_windows=occlusion_windows
@@ -664,7 +690,7 @@ def runsim_on_entire_dataset() -> None:
     json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
     log_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.log")
 
-    CLEAR_COLLECTED_DATA = False        # todo: perhaps implement this in a bette way
+    CLEAR_COLLECTED_DATA = False        # todo: perhaps implement this in a better way
     if CLEAR_COLLECTED_DATA:
         if os.path.exists(pkl_path):
             print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
@@ -741,9 +767,10 @@ def runsim_on_entire_dataset() -> None:
                 other_errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
-        print(f"Saving simulation table to:\n{pkl_path}")       # TODO: change behaviour to safely append data
-        with open(pkl_path, "wb") as f:
-            pickle.dump((occlusion_df), f)
+        if idx % 1000 == 0:
+            print(f"Saving simulation table to:\n{pkl_path}")       # TODO: change behaviour to safely append data
+            with open(pkl_path, "wb") as f:
+                pickle.dump(occlusion_df, f)
 
     total_errors = value_errors + runtime_errors + assert_errors + other_errors
     end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)\n" \
@@ -760,7 +787,7 @@ def runsim_on_entire_dataset() -> None:
 
     print(f"Saving simulation table to:\n{pkl_path}")
     with open(pkl_path, "wb") as f:
-        pickle.dump((occlusion_df), f)
+        pickle.dump(occlusion_df, f)
 
     print(f"Saving simulation config to:\n{json_path}")
     with open(json_path, "w", encoding="utf8") as f:
