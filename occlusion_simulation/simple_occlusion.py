@@ -104,7 +104,7 @@ def target_agent_candidate_indices(
         agent_list: List[StanfordDroneAgent],
         full_window: np.array,
         past_window: np.array
-) -> Tuple[List[int], List[float]]:
+) -> Tuple[np.array, np.array]:
     """
     returns a list of candidate agents to be the targets for occlusion simulation, with corresponding sampling
     probabilities. target agents must be:
@@ -125,14 +125,14 @@ def target_agent_candidate_indices(
 
     #todo: add check that all subsequent positions are different
 
-    return list(np.asarray(candidates).nonzero()[0]), list(distances[candidates]/sum(distances[candidates]))
+    return np.asarray(candidates).nonzero()[0], distances[candidates]/sum(distances[candidates])
 
 
 def select_random_target_agents(
-        candidate_indices: List[int],
-        sampling_probabilities: List[float],
+        candidate_indices: np.array,
+        sampling_probabilities: np.array,
         n: int = 1
-) -> List[int]:
+) -> np.array:
     """
     selects a random subset of agents present within the scene.
     n agents will be sampled (possibly fewer if there aren't enough agents).
@@ -141,7 +141,7 @@ def select_random_target_agents(
     if n > len(candidate_indices):
         # print(f"returning all available candidates: only {sum(is_moving)} moving agents in the scene")
         return candidate_indices
-    return list(np.random.choice(candidate_indices, n, replace=False, p=sampling_probabilities))
+    return np.asarray(np.random.choice(candidate_indices, n, replace=False, p=sampling_probabilities))
 
 
 def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: float, angle: float) -> List[sg.Polygon]:
@@ -456,31 +456,6 @@ def simulate_occlusions(
     # after T_pred timesteps).
     full_window = np.concatenate((past_window, future_window, [2 * future_window[-1] - future_window[-2]]))
 
-    # choose agents within the scene whose trajectory we would like to occlude virtually
-    target_agent_candidates, target_probabilities = target_agent_candidate_indices(agents, full_window, past_window)
-    if len(target_agent_candidates) == 0:
-        raise ValueError("No valid candidates available for occlusion simulation.")
-
-    target_agent_indices = select_random_target_agents(target_agent_candidates, target_probabilities)
-    simulation_dict["target_agent_indices"] = target_agent_indices
-
-    # generate occlusion windows -> List[Tuple[int, int]]
-    # each item provides two timesteps for each target agent:
-    # - the first one corresponds to the last observed timestep before occlusion
-    # - the second one corresponds to the first re-observed timestep before reappearance
-    occlusion_windows = generate_occlusion_timesteps(
-        n_agents=n_targets,
-        T_obs=past_window.shape[0],
-        T_pred=future_window.shape[0],
-        min_obs=min_obs,
-        min_reobs=min_reobs
-    )
-    simulation_dict["occlusion_windows"] = occlusion_windows
-    occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
-                                agents[idx].position_at_timestep(full_window[occlusion_window[1]]))
-                               for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
-    simulation_dict["occlusion_target_coords"] = occlusion_target_coords
-
     # set safety perimeter around the edges of the scene
     d_border_px = int((d_border/100 * np.linalg.norm(image_res)) // 10 * 11)
     scene_boundary = default_rectangle(image_res)
@@ -502,54 +477,101 @@ def simulate_occlusions(
     no_occluder_buffers = trajectory_buffers(agents, full_window[:-1], d_min_occl_ag)
     simulation_dict["no_occluder_buffers"] = no_occluder_buffers
 
-    # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
-    # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
-    # with the target agents' trajectories
-    no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
-        target_agent_no_ego_wedges(
-            scene_boundary, agents[idx].get_traj_section(full_window[:-1]), d_min_ag_ego, taper_angle
+    # BEGINNING OF CHECK FOR VALIDITY OF EGO PLACEMENT ##############################################################
+    # choose agents within the scene whose trajectory we would like to occlude virtually
+    target_agent_candidates, target_probabilities = target_agent_candidate_indices(agents, full_window, past_window)
+    if np.size(target_agent_candidates) == 0:
+        raise ValueError("No valid candidates available for occlusion simulation.")
+
+    target_agent_indices = None
+    no_ego_wedges = None
+    targets_fullobs_regions = None
+    yes_ego_triangles = []
+
+    while np.size(target_agent_candidates) != 0 and len(yes_ego_triangles) == 0:
+        target_agent_indices = select_random_target_agents(
+            target_agent_candidates, target_probabilities, n=1
         )
-        for idx in target_agent_indices
-    ])))
+
+        # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
+        # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
+        # with the target agents' trajectories
+        no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
+            target_agent_no_ego_wedges(
+                scene_boundary, agents[idx].get_traj_section(full_window[:-1]), d_min_ag_ego, taper_angle
+            )
+            for idx in target_agent_indices
+        ])))
+
+        # list: a given item is a sg.PolygonSet, which describes the regions in space from which
+        # every timestep of that agent can be directly observed, unobstructed by other agents
+        # (specifically, by their agent_buffer)
+        targets_fullobs_regions = trajectory_visibility_polygons(
+            agents=agents,
+            target_agent_indices=target_agent_indices,
+            agent_visipoly_buffers=agent_visipoly_buffers,
+            time_window=full_window[:-1],
+            boundary=scene_boundary
+        )
+        # targets_fullobs_regions = instantaneous_visibility_polygons(
+        #     agents=agents,
+        #     target_agent_indices=target_agent_indices,
+        #     agent_radius=r_agents,
+        #     interp_dt=1,
+        #     time_window=past_window,
+        #     boundary=scene_boundary
+        # )
+
+        # reducing into a single sg.PolygonSet
+        targets_fullobs_regions = functools.reduce(
+            lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
+            targets_fullobs_regions
+        )
+
+        # the regions within which we sample our ego are those within which target agents' full trajectories are
+        # observable, minus the boundaries and no_ego_zones we set previously.
+        # we will need to triangulate those regions in order to sample a point
+        # this can't be done in scikit-geometry (maybe it can?), so we're doing it with shapely instead
+        # (see inside triangulate_polyset function)
+        yes_ego_triangles = triangulate_polyset(
+            targets_fullobs_regions.difference(
+                no_ego_buffers.union(no_ego_wedges).union(frame_box)
+            )
+        )
+
+        # Here, verify that we do have triangles, otherwise remove target agent candidate, and do it again
+        if len(yes_ego_triangles) == 0:
+            # remove a random target_agent candidate
+            removed_target_idx = np.random.choice(target_agent_indices)
+            keep_index = (target_agent_candidates != removed_target_idx)
+            target_agent_candidates = target_agent_candidates[keep_index]
+            target_probabilities = target_probabilities[keep_index]
+            target_probabilities /= sum(target_probabilities)
+
+    if len(yes_ego_triangles) == 0:
+        raise ValueError(f"No placement of ego possible: yes_ego_triangle->{yes_ego_triangles}")
+
+    simulation_dict["target_agent_indices"] = target_agent_indices
     simulation_dict["no_ego_wedges"] = no_ego_wedges
-
-    # list: a given item is a sg.PolygonSet, which describes the regions in space from which
-    # every timestep of that agent can be directly observed, unobstructed by other agents
-    # (specifically, by their agent_buffer)
-    targets_fullobs_regions = trajectory_visibility_polygons(
-        agents=agents,
-        target_agent_indices=target_agent_indices,
-        agent_visipoly_buffers=agent_visipoly_buffers,
-        time_window=full_window[:-1],
-        boundary=scene_boundary
-    )
-    # targets_fullobs_regions = instantaneous_visibility_polygons(
-    #     agents=agents,
-    #     target_agent_indices=target_agent_indices,
-    #     agent_radius=r_agents,
-    #     interp_dt=1,
-    #     time_window=past_window,
-    #     boundary=scene_boundary
-    # )
-
-    # reducing into a single sg.PolygonSet
-    targets_fullobs_regions = functools.reduce(
-        lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
-        targets_fullobs_regions
-    )
     simulation_dict["targets_fullobs_regions"] = targets_fullobs_regions
-
-    # the regions within which we sample our ego are those within which target agents' full trajectories are
-    # observable, minus the boundaries and no_ego_zones we set previously.
-    # we will need to triangulate those regions in order to sample a point
-    # this can't be done in scikit-geometry (maybe it can?), so we're doing it with shapely instead
-    # (see inside triangulate_polyset function)
-    yes_ego_triangles = triangulate_polyset(
-        targets_fullobs_regions.difference(
-            no_ego_buffers.union(no_ego_wedges).union(frame_box)
-        )
-    )
     simulation_dict["yes_ego_triangles"] = yes_ego_triangles
+
+    # generate occlusion windows -> List[Tuple[int, int]]
+    # each item provides two timesteps for each target agent:
+    # - the first one corresponds to the last observed timestep before occlusion
+    # - the second one corresponds to the first re-observed timestep before reappearance
+    occlusion_windows = generate_occlusion_timesteps(
+        n_agents=n_targets,
+        T_obs=past_window.shape[0],
+        T_pred=future_window.shape[0],
+        min_obs=min_obs,
+        min_reobs=min_reobs
+    )
+    simulation_dict["occlusion_windows"] = occlusion_windows
+    occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
+                                agents[idx].position_at_timestep(full_window[occlusion_window[1]]))
+                               for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
+    simulation_dict["occlusion_target_coords"] = occlusion_target_coords
 
     # produce an ego_point from yes_ego_triangles
     ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
