@@ -431,6 +431,7 @@ def simulate_occlusions(
     simulation_dict = {
         "target_agent_indices": None,
         "occlusion_windows": None,
+        "occlusion_target_coords": None,
         "frame_box": None,
         "agent_visipoly_buffers": None,
         "no_occluder_buffers": None,
@@ -457,7 +458,6 @@ def simulate_occlusions(
 
     # choose agents within the scene whose trajectory we would like to occlude virtually
     target_agent_candidates, target_probabilities = target_agent_candidate_indices(agents, full_window, past_window)
-    print(target_agent_candidates, target_probabilities)
     if len(target_agent_candidates) == 0:
         raise ValueError("No valid candidates available for occlusion simulation.")
 
@@ -476,6 +476,10 @@ def simulate_occlusions(
         min_reobs=min_reobs
     )
     simulation_dict["occlusion_windows"] = occlusion_windows
+    occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
+                                agents[idx].position_at_timestep(full_window[occlusion_window[1]]))
+                               for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
+    simulation_dict["occlusion_target_coords"] = occlusion_target_coords
 
     # set safety perimeter around the edges of the scene
     d_border_px = int((d_border/100 * np.linalg.norm(image_res)) // 10 * 11)
@@ -644,27 +648,6 @@ def simulate_occlusions(
     )
     if not all(occlusion_patterns_correct):
         raise AssertionError("occlusion pattern incorrect")
-
-    # simulation_dict = {
-    #     "target_agent_indices": target_agent_indices,
-    #     "occlusion_windows": occlusion_windows,
-    #     "frame_box": frame_box,
-    #     "agent_visipoly_buffers": agent_visipoly_buffers,
-    #     "no_occluder_buffers": no_occluder_buffers,
-    #     "no_ego_buffers": no_ego_buffers,
-    #     "no_ego_wedges": no_ego_wedges,
-    #     "targets_fullobs_regions": targets_fullobs_regions,
-    #     "yes_ego_triangles": yes_ego_triangles,
-    #     "ego_point": ego_point,
-    #     "ego_buffer": ego_buffer,
-    #     "p1_area": p1_area,
-    #     "p1_triangles": p1_triangles,
-    #     "p1_visipolys": p1_visipolys,
-    #     "p2_area": p2_area,
-    #     "p2_triangles": p2_triangles,
-    #     "occluders": occluders,
-    #     "occluded_regions": occluded_regions
-    # }
 
     return simulation_dict
 
