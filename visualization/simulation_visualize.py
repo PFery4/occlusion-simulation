@@ -158,14 +158,7 @@ def plot_simulation_step_6(
 
 
 def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -> None:
-    agents = instance_dict["agents"]
-    past_window = instance_dict["past_window"]
-    future_window = instance_dict["future_window"]
-    full_window = np.concatenate((past_window, future_window))
-    full_window = np.append(full_window, [2 * full_window[-1] - full_window[-2]])       # todo: remove once fixed time window problems
-
-    target_agent_indices = simulation_dict["target_agent_indices"]
-    occlusion_windows = simulation_dict["occlusion_windows"]
+    occlusion_target_coords = simulation_dict["occlusion_target_coords"]
     frame_box = simulation_dict["frame_box"]
     agent_visipoly_buffers = simulation_dict["agent_visipoly_buffers"]
     no_occluder_buffers = simulation_dict["no_occluder_buffers"]
@@ -184,10 +177,8 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
     occluded_regions = simulation_dict["occluded_regions"]
 
     # visualization part
-    p_occls = [agents[idx].position_at_timestep(full_window[occlusion_window[0]])
-               for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
-    p_disoccls = [agents[idx].position_at_timestep(full_window[occlusion_window[1]])
-                  for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
+    p_occls = [coords[0] for coords in occlusion_target_coords]
+    p_disoccls = [coords[1] for coords in occlusion_target_coords]
     p1s = [occluder[0] for occluder in occluders]
     p2s = [occluder[1] for occluder in occluders]
 
@@ -247,6 +238,13 @@ def visualize_random_simulation_samples(
         nrows: int = 2,
         ncols: int = 2
 ) -> None:
+    import logging
+
+    # logging to standard out
+    logger = logging.getLogger(__name__)
+    c_handler = logging.StreamHandler()
+    logger.addHandler(c_handler)
+
     gs_kw = dict(wspace=0.1, hspace=0.1)
     fig, axs = plt.subplots(nrows, ncols, gridspec_kw=gs_kw)
 
@@ -266,7 +264,6 @@ def visualize_random_simulation_samples(
         agents = instance_dict["agents"]
         past_window = instance_dict["past_window"]
         future_window = instance_dict["future_window"]
-        full_window = np.concatenate((past_window, future_window))
 
         try:
             simulation_dict = simulate_occlusions(
@@ -277,17 +274,14 @@ def visualize_random_simulation_samples(
                 future_window=future_window
             )
 
-            target_agent_indices = simulation_dict["target_agent_indices"]
-            occlusion_windows = simulation_dict["occlusion_windows"]
+            occlusion_target_coords = simulation_dict["occlusion_target_coords"]
             ego_point = simulation_dict["ego_point"]
             occluders = simulation_dict["occluders"]
             occluded_regions = simulation_dict["occluded_regions"]
 
             # visualization part
-            p_occls = [agents[idx].position_at_timestep(full_window[occlusion_window[0]])
-                       for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
-            p_disoccls = [agents[idx].position_at_timestep(full_window[occlusion_window[1]])
-                          for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
+            p_occls = [coords[0] for coords in occlusion_target_coords]
+            p_disoccls = [coords[1] for coords in occlusion_target_coords]
             p1s = [occluder[0] for occluder in occluders]
             p2s = [occluder[1] for occluder in occluders]
 
@@ -302,9 +296,7 @@ def visualize_random_simulation_samples(
             )
 
         except Exception as ex:
-            print(type(ex))
-            print(ex)
+            logger.exception("\n\nSimulation Failed:\n")
             ax_i.text(sum(ax_i.get_xlim())/2, sum(ax_i.get_ylim())/2, "FAILED", fontsize=20, c="red", horizontalalignment="center", verticalalignment="center")
-            print()
 
     plt.show()
