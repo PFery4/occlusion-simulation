@@ -232,14 +232,33 @@ def trajectory_buffers(
 
 
 def generate_occlusion_timesteps(
-        n_agents: int, T_obs: int, T_pred: int, min_obs: int, min_reobs: int
-) -> List[Tuple[int, int]]:
-    occlusion_windows = []
-    for agent in range(n_agents):
-        t_occl = np.random.randint(min_obs - 1, T_obs - 1)
-        t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
-        occlusion_windows.append((t_occl, t_disoccl))
-    return occlusion_windows
+        agent: StanfordDroneAgent, past_window: np.array, future_window: np.array,
+        min_obs: int, min_reobs: int, tol: float = 1e-8
+) -> Tuple[int, int]:
+
+    full_window = np.concatenate([past_window, future_window])
+    full_traj = agent.get_traj_section(full_window)
+    displacements = np.linalg.norm(full_traj[1:] - full_traj[:-1], axis=1)
+    moving = (displacements >= tol)
+    past_mask = np.in1d(full_window, past_window)
+    past_mask[:min_obs-1] = False
+    past_occl_indices = np.nonzero(np.logical_and(past_mask[:past_window.shape[0]], moving[:past_window.shape[0]]))[0]
+    t_occl = int(np.random.choice(past_occl_indices))
+
+    future_mask = np.in1d(full_window, future_window)
+    if min_reobs != 0:
+        future_mask[-min_reobs:] = False
+    future_occl_indices = np.nonzero(np.logical_and(
+        future_mask[-future_window.shape[0]:], moving[-future_window.shape[0]:]
+    ))[0]
+
+    t_disoccl = int(np.random.choice(future_occl_indices) + past_window.shape[0])
+
+    # for agent in range(n_agents):
+    #     t_occl = np.random.randint(min_obs - 1, T_obs - 1)
+    #     t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
+    #     occlusion_windows.append((t_occl, t_disoccl))
+    return t_occl, t_disoccl
 
 
 def instantaneous_visibility_polygons(
@@ -560,14 +579,15 @@ def simulate_occlusions(
     # each item provides two timesteps for each target agent:
     # - the first one corresponds to the last observed timestep before occlusion
     # - the second one corresponds to the first re-observed timestep before reappearance
-    occlusion_windows = generate_occlusion_timesteps(
-        n_agents=n_targets,
-        T_obs=past_window.shape[0],
-        T_pred=future_window.shape[0],
-        min_obs=min_obs,
-        min_reobs=min_reobs
-    )
+    occlusion_windows = [generate_occlusion_timesteps(
+        agent=agents[idx],
+        past_window=past_window,
+        future_window=np.concatenate([future_window, [2 * future_window[-1] - future_window[-2]]]),
+        min_obs=min_obs, min_reobs=min_reobs
+    ) for idx in target_agent_indices]
     simulation_dict["occlusion_windows"] = occlusion_windows
+
+    # to those occlusion window timesteps, we compute the corresponding occlusion coordinates for each target agent
     occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
                                 agents[idx].position_at_timestep(full_window[occlusion_window[1]]))
                                for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
@@ -714,7 +734,8 @@ def runsim_on_entire_dataset() -> None:
     logger.addHandler(f_handler)
 
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
-    n_instances = len(dataset)
+    # n_instances = len(dataset)
+    n_instances = 1000
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
@@ -789,6 +810,8 @@ def runsim_on_entire_dataset() -> None:
     # setting the indices for easy lookup, and sorting the dataframe
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
     occlusion_df.sort_index(inplace=True)
+
+    print(ZBLU)
 
     print(f"Saving simulation table to:\n{pkl_path}")
     with open(pkl_path, "wb") as f:
