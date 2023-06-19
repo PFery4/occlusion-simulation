@@ -607,7 +607,7 @@ def simulate_occlusions(
     ego_visipoly = None
 
     while trial < 5 and not all(valid_occlusion_patterns):
-        print(f"{trial=}")
+        # print(f"{trial=}")
         # produce an ego_point from yes_ego_triangles
         ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
 
@@ -712,6 +712,7 @@ def simulate_occlusions(
 
 
 def runsim_on_entire_dataset() -> None:
+    import uuid
     import json
     import os.path
     import pickle
@@ -726,20 +727,15 @@ def runsim_on_entire_dataset() -> None:
 
     dataset = StanfordDroneDataset(config_dict=config)
 
-    # save the simulation dataframe and configuration dictionary to appropriate pickle and json files
-    sim_save_name = f"{dataset.pickle_id}_sim"
-    pkl_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.pickle")
-    json_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.json")
-    log_path = os.path.join(config["dataset"]["pickle_path"], f"{sim_save_name}.log")
+    # preparing the directory for saving simulation outputs
+    sim_folder = os.path.join(config["dataset"]["pickle_path"], dataset.pickle_id, str(uuid.uuid4()))
+    print(f"Creating simulation directory:\n{sim_folder}")
+    os.makedirs(sim_folder)
+    assert os.path.exists(sim_folder)
 
-    CLEAR_COLLECTED_DATA = False        # todo: perhaps implement this in a better way
-    if CLEAR_COLLECTED_DATA:
-        if os.path.exists(pkl_path):
-            print(f"\nRemoving simulation pickle file (already exists):\n{pkl_path}\n")
-            os.remove(pkl_path)
-        if os.path.exists(json_path):
-            print(f"\nRemoving simulation config file (already exists):\n{json_path}\n")
-            os.remove(json_path)
+    pkl_path = os.path.join(sim_folder, "simulation.pickle")
+    json_path = os.path.join(sim_folder, "simulation.json")
+    log_path = os.path.join(sim_folder, "simulation.log")
 
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)
@@ -750,22 +746,22 @@ def runsim_on_entire_dataset() -> None:
     f_handler.setLevel(logging.INFO)
     logger.addHandler(f_handler)
 
+    print(f"Saving simulation config to:\n{json_path}")
+    with open(json_path, "w", encoding="utf8") as f:
+        json.dump(config["occlusion_simulator"], f, indent=4)
+
     n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
-    # n_instances = len(dataset)
-    n_instances = 1000
+    n_instances = len(dataset)
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
         columns=["scene", "video", "timestep", "trial", "ego_point",
                  "occluders", "target_agent_indices", "occlusion_windows"]
     )
 
-    value_errors = 0
-    runtime_errors = 0
-    assert_errors = 0
-    other_errors = 0
+    errors = 0
     for idx in (pbar := tqdm(range(n_instances))):
 
-        pbar.set_description(f"ERRORS: v: {value_errors}, r: {runtime_errors}, a: {assert_errors}, o: {other_errors}")
+        pbar.set_description(f"ERRORS: {errors}")
 
         instance_dict = dataset.__getitem__(idx)
 
@@ -797,30 +793,16 @@ def runsim_on_entire_dataset() -> None:
                     "target_agent_indices": simdict["target_agent_indices"],
                     "occlusion_windows": simdict["occlusion_windows"]
                 }
-            except ValueError as e:
-                value_errors += 1
-                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
-            except RuntimeError as e:
-                runtime_errors += 1
-                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
-            except AssertionError as e:
-                assert_errors += 1
-                logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
             except Exception as e:
-                other_errors += 1
+                errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
 
         if idx % 1000 == 0:
-            print(f"Saving simulation table to:\n{pkl_path}")       # TODO: change behaviour to safely append data
+            print(f"Saving simulation table to:\n{pkl_path}")
             with open(pkl_path, "wb") as f:
                 pickle.dump(occlusion_df, f)
 
-    total_errors = value_errors + runtime_errors + assert_errors + other_errors
-    end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {total_errors} ({total_errors/(n_instances * n_sim_per_instance)*100}%)\n" \
-              f"ValueError: {value_errors}\n" \
-              f"RuntimeError: {runtime_errors}\n" \
-              f"AssertionError: {assert_errors}\n" \
-              f"Other: {other_errors}\n\n"
+    end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {errors} ({errors/(n_instances * n_sim_per_instance)*100}%)\n"
     print(end_msg)
     logger.info(end_msg)
 
@@ -828,15 +810,9 @@ def runsim_on_entire_dataset() -> None:
     occlusion_df.set_index(["scene", "video", "timestep", "trial"], inplace=True)
     occlusion_df.sort_index(inplace=True)
 
-    print(ZBLU)
-
     print(f"Saving simulation table to:\n{pkl_path}")
     with open(pkl_path, "wb") as f:
         pickle.dump(occlusion_df, f)
-
-    print(f"Saving simulation config to:\n{json_path}")
-    with open(json_path, "w", encoding="utf8") as f:
-        json.dump(config["occlusion_simulator"], f, indent=4)
 
 
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
@@ -906,5 +882,5 @@ def show_simulation():
 
 
 if __name__ == '__main__':
-    show_simulation()
-    # runsim_on_entire_dataset()
+    # show_simulation()
+    runsim_on_entire_dataset()

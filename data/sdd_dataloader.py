@@ -250,17 +250,24 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
     def __init__(self, config_dict):
         super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
 
-        sim_pkl_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}_sim.pickle")
-        sim_json_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}_sim.json")
-        print(f"{sim_pkl_path=}")
-        print(f"{sim_json_path=}")
+        sim_root_dir = os.path.join(config_dict["dataset"]["pickle_path"], self.pickle_id)
+        sim_folders = [path for path in os.scandir(sim_root_dir) if path.is_dir()]
 
-        assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path),\
-            "Simulation pickle and json files not found, " \
-            "please run the occlusion simulation and verify that the corresponding files have been saved"
+        occlusion_tables = []
+        sim_ids = []
 
-        self.occlusion_table = self.load_data(sim_pkl_path)
+        for dir in sim_folders:
+            sim_pkl_path = os.path.join(dir, "simulation.pickle")
+            sim_json_path = os.path.join(dir, "simulation.json")
 
+            assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path), \
+                "Simulation pickle and json files not found, " \
+                "please run the occlusion simulation and verify that the corresponding files have been saved"
+
+            occlusion_tables.append(self.load_data(sim_pkl_path))
+            sim_ids.append(os.path.basename(dir))
+
+        self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
         print(self.occlusion_table.head())
 
     def __len__(self):
@@ -270,7 +277,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         # lookup the row in self.occlusion_table
         occlusion_case = self.occlusion_table.iloc[idx]
 
-        scene, video, timestep, trial = occlusion_case.name
+        sim_id, scene, video, timestep, trial = occlusion_case.name
 
         # find the corresponding index in self.lookuptable
         lookup_idx = self.find_idx(scene=scene, video=video, timestep=timestep)
@@ -336,4 +343,5 @@ if __name__ == '__main__':
     # dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     # print(f"{len(dataset)=}")
     # print(f"{dataset.__getitem__(4)=}")
+    # print(f"{dataset.occlusion_table.index.values=}")
 
