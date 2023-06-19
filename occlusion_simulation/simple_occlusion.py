@@ -593,103 +593,120 @@ def simulate_occlusions(
                                for idx, occlusion_window in zip(target_agent_indices, occlusion_windows)]
     simulation_dict["occlusion_target_coords"] = occlusion_target_coords
 
-    # produce an ego_point from yes_ego_triangles
-    ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
+    valid_occlusion_patterns = [False] * len(target_agent_indices)
+    trial = 0
+
+    ego_point = None
+    ego_buffer = None
+    p1_area = None
+    p1_triangles = None
+    p1_visipolys = None
+    p2_area = None
+    p2_triangles = None
+    occluders = None
+    ego_visipoly = None
+
+    while trial < 5 and not all(valid_occlusion_patterns):
+        print(f"{trial=}")
+        # produce an ego_point from yes_ego_triangles
+        ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
+
+        # draw circle around the ego_point
+        ego_buffer = shapely_poly_2_skgeom_poly(sp.Point(*ego_point).buffer(d_min_occl_ego))
+
+        # ITERATE OVER TARGET AGENTS
+        p1_area = []
+        p1_triangles = []
+        p1_visipolys = []
+        p2_area = []
+        p2_triangles = []
+        occluders = []
+
+        for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
+            # occlusion_window = (t_occl, t_disoccl)
+
+            # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
+            p1_ego_traj_triangle = sg.Polygon(np.array(
+                [ego_point,
+                 agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
+                 agents[idx].position_at_timestep(full_window[occlusion_window[0] + 1])]
+            ))
+            if p1_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
+                p1_ego_traj_triangle.reverse_orientation()
+
+            p1_area.append(p1_ego_traj_triangle)
+
+            # extrude no_occluder_regions from the triangle
+            p1_ego_traj_triangle = sg.PolygonSet(p1_ego_traj_triangle).difference(
+                sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
+
+            # triangulate the resulting region
+            p1_triangles = triangulate_polyset(p1_ego_traj_triangle)
+            p1_triangles.extend(p1_triangles)
+
+            # sample our first occluder wall coordinate from the region
+            p1 = random_points_in_triangle(*sample_triangles(p1_triangles, k=1), k=1)
+
+            # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
+            # the point with a straight line
+            no_occl_segments = list(scene_boundary.edges)
+            [no_occl_segments.extend(poly.edges) for poly in no_occluder_buffers + [ego_buffer]]
+            visi_occl_arr = sg.arrangement.Arrangement()
+            [visi_occl_arr.insert(seg) for seg in no_occl_segments]
+
+            p1_visipoly = visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
+            p1_visipolys.append(p1_visipoly)
+
+            p2_ego_traj_triangle = sg.Polygon(np.array(
+                [ego_point,
+                 agents[idx].position_at_timestep(full_window[occlusion_window[1]]),
+                 agents[idx].position_at_timestep(full_window[occlusion_window[1] - 1])]
+            ))
+            if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
+                p2_ego_traj_triangle.reverse_orientation()
+
+            p2_area.append(p2_ego_traj_triangle)
+
+            p2_ego_traj_triangle = sg.PolygonSet(p2_ego_traj_triangle).intersection(p1_visipoly)
+
+            p2_triangles = triangulate_polyset(p2_ego_traj_triangle)
+            p2_triangles.extend(p2_triangles)
+
+            p2 = random_points_in_triangle(sample_triangles(p2_triangles, k=1)[0], k=1)
+
+            occluders.append((p1, p2))
+
+        ego_visi_arrangement = sg.arrangement.Arrangement()
+        [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
+         for occluder_coords in occluders]
+        [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
+
+        ego_visipoly = visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
+
+        # verify we do obtain the desired observable -> occluded -> observable pattern
+        valid_occlusion_patterns = verify_target_agents_occlusion_pattern(
+            visibility_polygon=ego_visipoly,
+            full_window=full_window[:-1],
+            agents=agents,
+            target_agent_indices=target_agent_indices,
+            occlusion_windows=occlusion_windows
+        )
+        trial += 1
+
+    if not all(valid_occlusion_patterns):
+        raise AssertionError("occlusion pattern incorrect")
+
+    occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
+
     simulation_dict["ego_point"] = ego_point
-
-    # COMPUTE OCCLUDERS
-    # draw circle around the ego_point
-    ego_buffer = shapely_poly_2_skgeom_poly(sp.Point(*ego_point).buffer(d_min_occl_ego))
     simulation_dict["ego_buffer"] = ego_buffer
-
-    # ITERATE OVER TARGET AGENTS
-    p1_area = []
-    p1_triangles = []
-    p1_visipolys = []
-    p2_area = []
-    p2_triangles = []
-    occluders = []
-
-    for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
-        # occlusion_window = (t_occl, t_disoccl)
-
-        # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
-        p1_ego_traj_triangle = sg.Polygon(np.array(
-            [ego_point,
-             agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
-             agents[idx].position_at_timestep(full_window[occlusion_window[0] + 1])]
-        ))
-        if p1_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
-            p1_ego_traj_triangle.reverse_orientation()
-
-        p1_area.append(p1_ego_traj_triangle)
-
-        # extrude no_occluder_regions from the triangle
-        p1_ego_traj_triangle = sg.PolygonSet(p1_ego_traj_triangle).difference(
-            sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
-
-        # triangulate the resulting region
-        p1_triangles = triangulate_polyset(p1_ego_traj_triangle)
-        p1_triangles.extend(p1_triangles)
-
-        # sample our first occluder wall coordinate from the region
-        p1 = random_points_in_triangle(*sample_triangles(p1_triangles, k=1), k=1)
-
-        # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
-        # the point with a straight line
-        no_occl_segments = list(scene_boundary.edges)
-        [no_occl_segments.extend(poly.edges) for poly in no_occluder_buffers + [ego_buffer]]
-        visi_occl_arr = sg.arrangement.Arrangement()
-        [visi_occl_arr.insert(seg) for seg in no_occl_segments]
-
-        p1_visipoly = visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
-        p1_visipolys.append(p1_visipoly)
-
-        p2_ego_traj_triangle = sg.Polygon(np.array(
-            [ego_point,
-             agents[idx].position_at_timestep(full_window[occlusion_window[1]]),
-             agents[idx].position_at_timestep(full_window[occlusion_window[1] - 1])]
-        ))
-        if p2_ego_traj_triangle.orientation() == sg.Sign.CLOCKWISE:
-            p2_ego_traj_triangle.reverse_orientation()
-
-        p2_area.append(p2_ego_traj_triangle)
-
-        p2_ego_traj_triangle = sg.PolygonSet(p2_ego_traj_triangle).intersection(p1_visipoly)
-
-        p2_triangles = triangulate_polyset(p2_ego_traj_triangle)
-        p2_triangles.extend(p2_triangles)
-
-        p2 = random_points_in_triangle(sample_triangles(p2_triangles, k=1)[0], k=1)
-
-        occluders.append((p1, p2))
-
     simulation_dict["p1_area"] = p1_area
     simulation_dict["p1_triangles"] = p1_triangles
     simulation_dict["p1_visipolys"] = p1_visipolys
     simulation_dict["p2_area"] = p2_area
     simulation_dict["p2_triangles"] = p2_triangles
     simulation_dict["occluders"] = occluders
-
-    ego_visi_arrangement = sg.arrangement.Arrangement()
-    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
-     for occluder_coords in occluders]
-    [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
-
-    ego_visipoly = visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
-    occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
     simulation_dict["occluded_regions"] = occluded_regions
-
-    # verify we do obtain the desired observable -> occluded -> observable pattern
-    occlusion_patterns_correct = verify_target_agents_occlusion_pattern(
-        visibility_polygon=ego_visipoly,
-        full_window=full_window[:-1],
-        agents=agents,
-        target_agent_indices=target_agent_indices,
-        occlusion_windows=occlusion_windows
-    )
-    if not all(occlusion_patterns_correct):
-        raise AssertionError("occlusion pattern incorrect")
 
     return simulation_dict
 
