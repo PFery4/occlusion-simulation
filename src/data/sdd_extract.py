@@ -11,7 +11,7 @@ def get_config() -> dict:
     :return: the contents of the config file, as a dict
     """
     # read config file
-    confpath = os.path.abspath(os.path.realpath(__file__) + "/../../config.yaml")
+    confpath = os.path.abspath(os.path.realpath(__file__) + "/../../../config.yaml")
     assert os.path.exists(confpath), f"ERROR | PATH DOES NOT EXIST:\n{confpath}"
     # print(f"Loading config from:\n{confpath}\n")
 

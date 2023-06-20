@@ -7,8 +7,8 @@ import torchvision.transforms
 import pickle
 import json
 import uuid
-import data.sdd_extract as sdd_extract
-import data.sdd_data_processing as sdd_data_processing
+import src.data.sdd_extract as sdd_extract
+import src.data.sdd_data_processing as sdd_data_processing
 
 
 class StanfordDroneAgent:

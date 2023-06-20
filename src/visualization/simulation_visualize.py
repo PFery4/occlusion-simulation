@@ -7,9 +7,9 @@ import shapely.geometry as sp
 import skgeom as sg
 import numpy as np
 from typing import Union, List
-import visualization.sdd_visualize as sdd_visualize
-from data.sdd_dataloader import StanfordDroneDataset
-from occlusion_simulation.simple_occlusion import simulate_occlusions
+import src.visualization.sdd_visualize as sdd_visualize
+from src.data.sdd_dataloader import StanfordDroneDataset
+from src.occlusion_simulation.simple_occlusion import simulate_occlusions
 
 
 def plot_sp_polygon(ax: matplotlib.axes.Axes, poly: sp.Polygon, **kwargs) -> None:

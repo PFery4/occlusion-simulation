@@ -7,10 +7,10 @@ import functools
 import itertools
 from scipy.interpolate import interp1d
 from typing import List, Tuple, Union
-import data.sdd_extract as sdd_extract
-from data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
-import visualization.simulation_visualize as sim_visualize
-import visualization.sdd_visualize as sdd_visualize
+import src.data.sdd_extract as sdd_extract
+from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
+import src.visualization.simulation_visualize as sim_visualize
+import src.visualization.sdd_visualize as sdd_visualize
 
 
 # def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
