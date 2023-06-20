@@ -294,7 +294,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import time
-    import visualization.sdd_visualize as sdd_visualize
+    import src.visualization.sdd_visualize as sdd_visualize
 
     config = sdd_extract.get_config()
 
