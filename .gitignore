@@ -4,3 +4,5 @@ outputs
 config.yaml
 data/pickled_dataloaders
 **/*.log
+delftblue
+
