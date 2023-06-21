@@ -196,7 +196,6 @@ class StanfordDroneDataset(Dataset):
 
     def metadata_dict(self):
         metadata_dict = {
-            "root": self.root,
             "orig_fps": self.orig_fps,
             "fps": self.fps,
             "T_obs": self.T_obs,
