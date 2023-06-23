@@ -14,5 +14,8 @@ fi
 echo "PYTHONPATH variable is:"
 echo $PYTHONPATH
 
-conda activate occl-pred
+# conda environment name
+CONDA_ENV="py38-occl-pred"
+
+conda activate $CONDA_ENV
 

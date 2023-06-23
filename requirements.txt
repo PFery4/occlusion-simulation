@@ -1,27 +1,16 @@
-# Initial list of commands:
-# conda create --name occl-pred python=3.8
-# 
-# conda install -c conda-forge opencv
-# conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-# conda install pandas
-# conda install matplotlib
-# conda install -c conda-forge shapely
-# conda install scikit-geometry -c conda-forge
-#
 # This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file> -c conda-forge -c nvidia -c pytorch
+# $ conda create --name <env> --file <this file> -c conda-forge
 # platform: linux-64
 python=3.8
-cudatoolkit=11.8
-pytorch-cuda=11.8
-pytorch
-torchvision
-torchaudio
-opencv
 pandas
 matplotlib
 numpy
 scipy
 shapely
 scikit-geometry
-yaml
+pyyaml
+tqdm
+# then, pytorch and opencv must be installed with pip in order to prevent dependency conflicts:
+# conda activate <env>
+# pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
+# pip3 install opencv-python
