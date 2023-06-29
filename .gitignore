@@ -1,4 +1,8 @@
-.idea
+# ignore all hidden files and directories
+.*
+!/.gitignore
+
+
 **/__pycache__
 outputs
 config.yaml
