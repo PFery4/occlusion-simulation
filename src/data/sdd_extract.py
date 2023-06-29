@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import yaml
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
 SDD_COL_NAMES = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
 
 
@@ -11,7 +12,7 @@ def get_config() -> dict:
     :return: the contents of the config file, as a dict
     """
     # read config file
-    confpath = os.path.abspath(os.path.realpath(__file__) + "/../../../config.yaml")
+    confpath = os.path.join(REPO_ROOT, "config.yaml")
     assert os.path.exists(confpath), f"ERROR | PATH DOES NOT EXIST:\n{confpath}"
     # print(f"Loading config from:\n{confpath}\n")
 
