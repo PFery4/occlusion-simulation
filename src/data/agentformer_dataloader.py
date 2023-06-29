@@ -1,3 +1,5 @@
+# AgentFormer imports
+from utils.config import Config
 
 
 class AgentFormerDataGenerator:
