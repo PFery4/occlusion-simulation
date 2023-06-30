@@ -31,6 +31,9 @@ class StanfordDroneAgent:
     def position_at_timestep(self, timestep: int) -> np.array:
         return self.fulltraj[np.where(self.timesteps == timestep)].reshape(2,)
 
+    def get_data_availability_mask(self, time_window: np.array) -> np.array:
+        return np.in1d(time_window, self.timesteps).astype(float)
+
 
 class StanfordDroneDataset(Dataset):
 
