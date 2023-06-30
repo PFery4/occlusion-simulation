@@ -2,7 +2,7 @@
 # $ conda create --name <env> --file <this file> -c conda-forge
 # platform: linux-64
 python=3.8
-pandas
+pandas<2.0.0
 matplotlib
 tensorboard
 numpy
