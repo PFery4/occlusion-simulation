@@ -47,10 +47,11 @@ class StanfordDroneDataset(Dataset):
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        self.pickle_id = self.find_pickle_id(config_dict["dataset"]["pickle_path"])
+        pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        self.pickle_id = self.find_pickle_id(pickle_path)
 
         if self.pickle_id:
-            found_path = os.path.join(config_dict["dataset"]["pickle_path"], f"{self.pickle_id}.pickle")
+            found_path = os.path.join(pickle_path, f"{self.pickle_id}.pickle")
             assert os.path.exists(found_path)
             print(f"Loading dataloader from:\n{found_path}")
             self.frames, self.lookuptable = self.load_data(found_path)
@@ -130,7 +131,7 @@ class StanfordDroneDataset(Dataset):
 
             # generate unique file name for our saved pickle and json files
             self.pickle_id = str(uuid.uuid4())
-            self.save_data(config_dict["dataset"]["pickle_path"], self.pickle_id)
+            self.save_data(pickle_path, self.pickle_id)
 
     def __len__(self):
         return len(self.lookuptable)
@@ -249,7 +250,12 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
     def __init__(self, config_dict):
         super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
 
-        sim_root_dir = os.path.join(config_dict["dataset"]["pickle_path"], self.pickle_id)
+        pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        sim_root_dir = os.path.join(pickle_path, self.pickle_id)
+
+        assert os.path.exists(sim_root_dir)
+        print(f"Simulation pickle files are stored under:\n{sim_root_dir}")
+
         sim_folders = [path for path in os.scandir(sim_root_dir) if path.is_dir()]
 
         occlusion_tables = []
@@ -262,6 +268,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
             assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path), \
                 "Simulation pickle and json files not found, " \
                 "please run the occlusion simulation and verify that the corresponding files have been saved"
+            print(f"extracting data form: {sim_pkl_path}")
 
             occlusion_tables.append(self.load_data(sim_pkl_path))
             sim_ids.append(os.path.basename(dir))

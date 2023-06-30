@@ -728,7 +728,8 @@ def runsim_on_entire_dataset() -> None:
     dataset = StanfordDroneDataset(config_dict=config)
 
     # preparing the directory for saving simulation outputs
-    sim_folder = os.path.join(config["dataset"]["pickle_path"], dataset.pickle_id, str(uuid.uuid4()))
+    pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config["dataset"]["pickle_path"]))
+    sim_folder = os.path.join(pickle_path, dataset.pickle_id, str(uuid.uuid4()))
     print(f"Creating simulation directory:\n{sim_folder}")
     os.makedirs(sim_folder)
     assert os.path.exists(sim_folder)

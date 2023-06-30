@@ -121,7 +121,7 @@ def visualize_full_trajectories_on_all_scenes():
 
     show = True
     save = False
-    save_path = config_dict["results"]["fig_path"]
+    save_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["results"]["fig_path"]))
     assert os.path.exists(save_path)
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
