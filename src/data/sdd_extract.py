@@ -6,13 +6,13 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", 
 SDD_COL_NAMES = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
 
 
-def get_config() -> dict:
+def get_config(config_filename) -> dict:
     """
-    reads the config file 'config.yaml' at the root of the project repository
+    reads the config file '{config_filename}.yaml' at the root of the project repository
     :return: the contents of the config file, as a dict
     """
     # read config file
-    confpath = os.path.join(REPO_ROOT, "config.yaml")
+    confpath = os.path.join(REPO_ROOT, "config", f"{config_filename}.yaml")
     assert os.path.exists(confpath), f"ERROR | PATH DOES NOT EXIST:\n{confpath}"
     # print(f"Loading config from:\n{confpath}\n")
 
@@ -37,4 +37,4 @@ def pd_df_from(annotation_filepath):
 
 
 if __name__ == '__main__':
-    print(get_config())
+    print(get_config("config"))

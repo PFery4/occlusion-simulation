@@ -295,7 +295,7 @@ if __name__ == '__main__':
     import time
     import src.visualization.sdd_visualize as sdd_visualize
 
-    config = sdd_extract.get_config()
+    config = sdd_extract.get_config("config")
 
     dataset = StanfordDroneDataset(config_dict=config)
     print(f"{len(dataset)=}")

@@ -720,7 +720,7 @@ def runsim_on_entire_dataset() -> None:
     import logging
     from tqdm import tqdm
 
-    config = sdd_extract.get_config()
+    config = sdd_extract.get_config("config")
 
     # setting the random seed (for reproducibility)
     np.random.seed(config["occlusion_simulator"]["rng_seed"])
@@ -848,7 +848,7 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
 
 def show_simulation():
-    config = sdd_extract.get_config()
+    config = sdd_extract.get_config("config")
     dataset = StanfordDroneDataset(config_dict=config)
 
     # showing the simulation process of some desired instance

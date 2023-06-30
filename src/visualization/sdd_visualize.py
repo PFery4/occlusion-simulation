@@ -115,7 +115,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
 
 
 def visualize_full_trajectories_on_all_scenes():
-    config_dict = sdd_extract.get_config()
+    config_dict = sdd_extract.get_config("config")
     data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
@@ -181,7 +181,7 @@ def visualize_full_trajectories_on_all_scenes():
 
 
 def get_video_resolutions():
-    config = sdd_extract.get_config()
+    config = sdd_extract.get_config("config")
     data_dir = os.path.join(config["dataset"]["path"], "annotations")
     print(data_dir)
     assert os.path.exists(data_dir)
