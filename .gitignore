@@ -3,7 +3,7 @@
 !/.gitignore
 
 # ignore all config files, except the default one
-config
+config/*
 !/config/default_config.yaml
 
 # ignore all __pycache__ directories
