@@ -1,0 +1,29 @@
+dataset:
+  path: <PATH/TO/SDD_DATASET> # the path points to the root of the dataset (ie where the README is located)
+  fps: 30   # frequency of annotation (SDD dataset = 30Hz)
+  pickle_path: outputs/pickled_dataloaders # the path to the directory used to save pickle files for preprocessed dataloaders (relative from repository root directory)
+
+results:
+  fig_path: outputs/figures # the path that will be used to save figures generated from scripts (relative from repository root directory)
+
+hyperparameters:
+  T_obs: 8                                          # [-] size of observation window  [-T_obs+1 : 0]
+  T_pred: 12                                        # [-] prediction horizon          [1 : T_pred]
+  fps: 2.5                                          # [s^-1] trajectory sampling fps
+  agent_types: ["Pedestrian", "Biker", "Skater"]    # select from ["Pedestrian", "Biker", "Skater", "Car", "Bus", "Cart"]. Types of agent we are interested in for our prediction
+  other_agents: "OUT"                               # can be either "IN" or "OUT". Defines whether the agent belonging to classes outside the selected "agent_types" are kept as eventual providers of social context for the prediction ("IN"), or whether they are completely removed from the dataset in preprocessing, resulting in the model disregarding those agents entirely ("OUT")
+  min_N_agents: 1                                   # [-] minimum number of fully observed agents for a candidate instance window to be made part of the dataset
+
+occlusion_simulator:
+  rng_seed: 42                  # [-] random number generator seed
+  simulations_per_instance: 1   # [-] number of runs per SDD instance (only used when running the sim on the whole dataset)
+  n_target_agents: 1            # [-] number of desired agents to occlude virtually
+  min_obs: 3                    # [-] minimum amount of timesteps we want to have observed within observation window
+  min_reobs: 0                  # [-] minimum amount of timesteps we want to be able to reobserve after disocclusion
+  d_border: 4.5                 # [-] buffer distance to prevent ego-placement near scene border (expressed as percentage of scene image diagonal)
+  d_min_occl_ag: 60             # [px] minimum distance that any point of a virtual occluder may have wrt any agent
+  d_min_occl_ego: 30            # [px] minimum distance that any point of a virtual occluder may have wrt ego
+  k_ag_ego_distance: 1.1        # [-] d_min_ag_ego = (d_min_occl_ego + d_min_occl_ag) * k_ag_ego_distance
+  target_angle: 20              # [deg] angle for the generation of wedges to constrain ego-placement
+  r_agents: 10                  # [px] estimated "width" of agents
+
