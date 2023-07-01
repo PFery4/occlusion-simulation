@@ -4,15 +4,12 @@
 python=3.8
 pandas<2.0.0
 matplotlib
-tensorboard
 numpy
 scipy
 shapely
 scikit-geometry
 pyyaml
 tqdm
-easydict
-glob2
 # then, pytorch and opencv must be installed with pip in order to prevent dependency conflicts:
 # conda activate <env>
 # pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
