@@ -1,7 +1,7 @@
 # This file may be used to create an environment using:
 # $ conda create --name <env> --file <this file> -c conda-forge
 # platform: linux-64
-python=3.8
+# python=3.8
 pandas<2.0.0
 matplotlib
 numpy
