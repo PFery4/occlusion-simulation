@@ -7,7 +7,7 @@ matplotlib
 numpy
 scipy
 shapely
-scikit-geometry
+# scikit-geometry
 pyyaml
 tqdm
 # then, pytorch and opencv must be installed with pip in order to prevent dependency conflicts:
