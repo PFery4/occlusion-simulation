@@ -277,7 +277,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
             sim_ids.append(os.path.basename(dir))
 
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
-        print(self.occlusion_table.head())
+        # print(self.occlusion_table.head())
 
     def __len__(self):
         return len(self.occlusion_table)
@@ -307,13 +307,14 @@ if __name__ == '__main__':
 
     config = sdd_extract.get_config("config")
 
-    dataset = StanfordDroneDataset(config_dict=config)
+    # dataset = StanfordDroneDataset(config_dict=config)
+    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     print(f"{len(dataset)=}")
 
-    ##################################################################################################################
     n_rows = 2
-    n_cols = n_rows
+    n_cols = 2
 
+    ##################################################################################################################
     fig, axes = plt.subplots(n_rows, n_cols)
     fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
 
@@ -329,10 +330,16 @@ if __name__ == '__main__':
         print(f"getitem({idx}) took {time.time() - before} s")
 
         axes[ax_x, ax_y].title.set_text(idx)
+        sdd_visualize.draw_map(
+            draw_ax=axes[ax_x, ax_y], image_tensor=instance_dict["image_tensor"]
+        )
+        if "ego_point" in instance_dict.keys():
+            sdd_visualize.visualize_occlusion_map(
+                draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
+            )
         sdd_visualize.visualize_training_instance(
             draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
         )
-
     plt.show()
     ##################################################################################################################
 
@@ -348,8 +355,3 @@ if __name__ == '__main__':
     # [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
 
     ##################################################################################################################
-    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
-    print(f"{len(dataset)=}")
-    print(f"{dataset.__getitem__(4)=}")
-    print(f"{dataset.occlusion_table.index.values=}")
-
