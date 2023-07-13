@@ -9,8 +9,6 @@ from scipy.interpolate import interp1d
 from typing import List, Tuple, Union
 import src.data.sdd_extract as sdd_extract
 from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
-import src.visualization.simulation_visualize as sim_visualize
-import src.visualization.sdd_visualize as sdd_visualize
 
 
 # def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
@@ -849,6 +847,9 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
 
 def show_simulation():
+    import src.visualization.simulation_visualize as sim_visualize
+    import src.visualization.sdd_visualize as sdd_visualize
+
     config = sdd_extract.get_config("config")
     dataset = StanfordDroneDataset(config_dict=config)
 
