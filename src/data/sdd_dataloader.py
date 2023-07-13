@@ -319,15 +319,14 @@ if __name__ == '__main__':
 
     idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
 
-    print(idx_samples)
+    print(f"visualizing the following randomly chosen samples: {idx_samples}")
     for ax_k, idx in enumerate(idx_samples):
 
         ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
 
         before = time.time()
         instance_dict = dataset.__getitem__(idx)
-        after = time.time()
-        print(f"getitem({idx}) took {after - before} seconds")
+        print(f"getitem({idx}) took {time.time() - before} s")
 
         axes[ax_x, ax_y].title.set_text(idx)
         sdd_visualize.visualize_training_instance(
@@ -349,8 +348,8 @@ if __name__ == '__main__':
     # [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
 
     ##################################################################################################################
-    # dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
-    # print(f"{len(dataset)=}")
-    # print(f"{dataset.__getitem__(4)=}")
-    # print(f"{dataset.occlusion_table.index.values=}")
+    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    print(f"{len(dataset)=}")
+    print(f"{dataset.__getitem__(4)=}")
+    print(f"{dataset.occlusion_table.index.values=}")
 
