@@ -89,8 +89,8 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
     # set the x and y axes
-    draw_ax.set_xlim((0, instance_dict["image_tensor"].shape[2]))
-    draw_ax.set_ylim((instance_dict["image_tensor"].shape[1], 0))
+    draw_ax.set_xlim(0., instance_dict["image_tensor"].shape[2])
+    draw_ax.set_ylim(instance_dict["image_tensor"].shape[1], 0.)
 
     # first draw the reference image onto the axis
     draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
@@ -103,12 +103,12 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
             time_window=np.array([instance_dict["past_window"][-1]] + list(instance_dict["future_window"]))
         )
 
-        draw_ax.plot(past[:, 0], past[:, 1], c=c)
-        draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", c=c)
+        draw_ax.plot(past[:, 0], past[:, 1], color=c)
+        draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", color=c)
         draw_ax.scatter(past[-1, 0], past[-1, 1],
-                        s=40, marker="x", c=c, label=f"${SDD_CLASS_SYMBOLS[agent.label]}^{{{agent.id}}}$")
-        draw_ax.plot(future[:, 0], future[:, 1], c=c, linestyle="dashed", alpha=0.8)
-        draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", c=c, alpha=0.8)
+                        s=40, marker="x", color=c, label=f"${SDD_CLASS_SYMBOLS[agent.label]}^{{{agent.id}}}$")
+        draw_ax.plot(future[:, 0], future[:, 1], color=c, linestyle="dashed", alpha=0.8)
+        draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", color=c, alpha=0.8)
 
     if lgnd:
         draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
