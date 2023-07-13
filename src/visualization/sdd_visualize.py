@@ -4,9 +4,13 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 import pandas as pd
+import torch
+import skgeom as sg
+
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
-
+import src.occlusion_simulation.simple_occlusion as simple_occlusion
+from src.visualization.plot_utils import plot_sg_polygon
 
 SDD_CLASS_SYMBOLS = {'Pedestrian': 'P',     # pedestrian
                      'Biker': 'C',          # cyclist
@@ -73,7 +77,16 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
-def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict, lgnd: bool = True):
+def draw_map(draw_ax: matplotlib.axes.Axes, image_tensor: torch.Tensor) -> None:
+    # set the x and y axes
+    draw_ax.set_xlim(0., image_tensor.shape[2])
+    draw_ax.set_ylim(image_tensor.shape[1], 0.)
+
+    # draw the reference image
+    draw_ax.imshow(image_tensor.permute(1, 2, 0))
+
+
+def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict, lgnd: bool = True) -> None:
     """
     This function draws the trajectory segments of agents contained within one single training instance extracted from
     the dataloader.
@@ -84,16 +97,8 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         - 'past_window': a numpy array of type 'int', indicating the timesteps corresponding to the observation window
         - 'future_window': a numpy array of type 'int', indicating the timesteps corresponding to the prediction horizon
         - 'image_tensor': a torch tensor containing the reference image data
-    :return:
     """
     # TODO: maybe add a check to draw partially observed trajectories in gray
-
-    # set the x and y axes
-    draw_ax.set_xlim(0., instance_dict["image_tensor"].shape[2])
-    draw_ax.set_ylim(instance_dict["image_tensor"].shape[1], 0.)
-
-    # first draw the reference image onto the axis
-    draw_ax.imshow(instance_dict["image_tensor"].permute(1, 2, 0))
 
     color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["agents"]))))
     for agent in instance_dict["agents"]:
@@ -112,6 +117,31 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
 
     if lgnd:
         draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
+
+
+def visualize_occlusion_map(draw_ax: matplotlib.axes.Axes, instance_dict: dict) -> None:
+    draw_ax.scatter(instance_dict["ego_point"][0], instance_dict["ego_point"][1],
+                    s=20, marker="D", color="yellow", alpha=0.9, label="Ego")
+
+    for occluder in instance_dict["occluders"]:
+        draw_ax.plot([occluder[0][0], occluder[1][0]],
+                     [occluder[0][1], occluder[1][1]],
+                     color="black")
+
+    scene_boundary = simple_occlusion.default_rectangle(
+        (float(instance_dict["image_tensor"].shape[1]),
+         float(instance_dict["image_tensor"].shape[2]))
+    )
+    ego_visi_arrangement = sg.arrangement.Arrangement()
+    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
+     for occluder_coords in instance_dict["occluders"]]
+    [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
+
+    ego_visipoly = simple_occlusion.visibility_polygon(ego_point=instance_dict["ego_point"],
+                                                       arrangement=ego_visi_arrangement)
+    occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
+    [plot_sg_polygon(ax=draw_ax, poly=poly, edgecolor="red", facecolor="red", alpha=0.2)
+     for poly in occluded_regions.polygons]
 
 
 def visualize_full_trajectories_on_all_scenes():
