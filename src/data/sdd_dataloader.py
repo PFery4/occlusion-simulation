@@ -301,14 +301,13 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
 
-        for temporal in ["past", "future"]:
-            instance_dict[f"{temporal}_occlusion_masks"] = self.occlusion_masks(
-                agents=instance_dict["agents"],
-                time_window=instance_dict[f"{temporal}_window"],
-                ego_point=instance_dict["ego_point"],
-                occluders=instance_dict["occluders"],
-                scene_image_dims=tuple(instance_dict['image_tensor'].shape[1:])
-            )
+        instance_dict["full_window_occlusion_masks"] = self.occlusion_masks(
+            agents=instance_dict["agents"],
+            time_window=np.concatenate((instance_dict["past_window"], instance_dict["future_window"])),
+            ego_point=instance_dict["ego_point"],
+            occluders=instance_dict["occluders"],
+            scene_image_dims=tuple(instance_dict['image_tensor'].shape[1:])
+        )
         return instance_dict
 
     @staticmethod

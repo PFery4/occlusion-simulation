@@ -101,15 +101,13 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
     color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["agents"]))))
-    past_masks = instance_dict.get(
-        "past_occlusion_masks",
-        [np.ones(len(instance_dict["past_window"])).astype(bool)] * len(instance_dict["agents"])
+    full_masks = instance_dict.get(
+        "full_window_occlusion_masks",
+        [np.ones(
+            len(instance_dict["past_window"]) + len(instance_dict["future_window"])
+        ).astype(bool)] * len(instance_dict["agents"])
     )
-    future_masks = instance_dict.get(
-        "future_occlusion_masks",
-        [np.ones(len(instance_dict["future_window"])).astype(bool)] * len(instance_dict["agents"])
-    )
-    for agent, past_mask, future_mask in zip(instance_dict["agents"], past_masks, future_masks):
+    for agent, full_mask in zip(instance_dict["agents"], full_masks):
         c = next(color_iter).reshape(1, -1)
         past = agent.get_traj_section(time_window=instance_dict["past_window"])
         future = agent.get_traj_section(
@@ -118,8 +116,6 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         full = agent.get_traj_section(
             time_window=np.concatenate((instance_dict["past_window"], instance_dict["future_window"]))
         )
-        full_mask = np.concatenate((past_mask, future_mask))
-
         occluded = full[~full_mask]
         draw_ax.scatter(occluded[:, 0], occluded[:, 1],
                         s=50, marker="x", color="black", alpha=0.9)
