@@ -2,13 +2,16 @@ import os.path
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
+import skgeom as sg
 import cv2
 import torchvision.transforms
 import pickle
 import json
 import uuid
+from typing import List, Tuple
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
+import src.occlusion_simulation.simple_occlusion as simple_occlusion
 
 
 class StanfordDroneAgent:
@@ -136,10 +139,10 @@ class StanfordDroneDataset(Dataset):
             self.pickle_id = str(uuid.uuid4())
             self.save_data(pickle_path, self.pickle_id)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.lookuptable)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict:
         # lookup the row in self.lookuptable
         lookup = self.lookuptable.iloc[idx]
         scene, video, timestep = lookup.name
@@ -198,7 +201,7 @@ class StanfordDroneDataset(Dataset):
         video_slice = self.lookuptable.index.get_loc((scene, video, timestep))
         return int(video_slice)
 
-    def metadata_dict(self):
+    def metadata_dict(self) -> dict:
         metadata_dict = {
             "orig_fps": self.orig_fps,
             "fps": self.fps,
@@ -210,7 +213,7 @@ class StanfordDroneDataset(Dataset):
         }
         return metadata_dict
 
-    def find_pickle_id(self, search_dir):
+    def find_pickle_id(self, search_dir: str):
         """
         looks for a pickle file with same corresponding metadata as self.metadata_dict()
         :param search_dir: the directory within which to look
@@ -225,7 +228,7 @@ class StanfordDroneDataset(Dataset):
                     return f"{os.path.splitext(os.path.basename(jsonfile))[0]}"
         return None
 
-    def save_data(self, path, save_name):
+    def save_data(self, path: str, save_name: str):
         """
         saves self.frames and self.lookuptable into a pickle file, and the corresponding parameters as a json
         :return: None
@@ -239,7 +242,7 @@ class StanfordDroneDataset(Dataset):
             json.dump(self.metadata_dict(), f, indent=4)
 
     @staticmethod
-    def load_data(filepath):
+    def load_data(filepath: str):
         """
         reads the pickle file with name 'filepath', and assigns corresponding values to self.frames and self.lookuptable
         :param filepath: the path of the pickle file to read from
@@ -279,10 +282,10 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
         # print(self.occlusion_table.head())
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.occlusion_table)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict:
         # lookup the row in self.occlusion_table
         occlusion_case = self.occlusion_table.iloc[idx]
 
@@ -297,7 +300,37 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         instance_dict["occluders"] = occlusion_case["occluders"]
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
+
+        for temporal in ["past", "future"]:
+            instance_dict[f"{temporal}_occlusion_masks"] = self.occlusion_masks(
+                agents=instance_dict["agents"],
+                time_window=instance_dict[f"{temporal}_window"],
+                ego_point=instance_dict["ego_point"],
+                occluders=instance_dict["occluders"],
+                scene_image_dims=tuple(instance_dict['image_tensor'].shape[1:])
+            )
         return instance_dict
+
+    @staticmethod
+    def occlusion_masks(agents: List[StanfordDroneAgent],
+                            time_window: np.array,
+                            ego_point: np.array,
+                            occluders: List[Tuple[np.array, np.array]],
+                            scene_image_dims: Tuple[float, float]) -> List[np.array]:
+        ego_visipoly = simple_occlusion.compute_visibility_polygon(
+            ego_point=ego_point,
+            occluders=occluders,
+            boundary=simple_occlusion.default_rectangle(scene_image_dims)
+        )
+
+        agent_masks = []
+        for agent in agents:
+            agent_mask = np.array([
+                ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
+                for point in agent.get_traj_section(time_window)
+            ])
+            agent_masks.append(agent_mask)
+        return agent_masks
 
 
 if __name__ == '__main__':
@@ -324,22 +357,24 @@ if __name__ == '__main__':
     for ax_k, idx in enumerate(idx_samples):
 
         ax_x, ax_y = ax_k // n_cols, ax_k % n_cols
+        ax = axes[ax_x, ax_y] if n_rows != 1 or n_cols != 1 else axes
 
         before = time.time()
         instance_dict = dataset.__getitem__(idx)
         print(f"getitem({idx}) took {time.time() - before} s")
 
-        axes[ax_x, ax_y].title.set_text(idx)
+        ax.title.set_text(idx)
         sdd_visualize.draw_map(
-            draw_ax=axes[ax_x, ax_y], image_tensor=instance_dict["image_tensor"]
+            draw_ax=ax, image_tensor=instance_dict["image_tensor"]
         )
         if "ego_point" in instance_dict.keys():
             sdd_visualize.visualize_occlusion_map(
-                draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
+                draw_ax=ax, instance_dict=instance_dict
             )
         sdd_visualize.visualize_training_instance(
-            draw_ax=axes[ax_x, ax_y], instance_dict=instance_dict
+            draw_ax=ax, instance_dict=instance_dict
         )
+
     plt.show()
     ##################################################################################################################
 
