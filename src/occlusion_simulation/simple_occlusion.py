@@ -186,6 +186,19 @@ def visibility_polygon(ego_point: Tuple[float, float], arrangement: sg.arrangeme
     return sg.Polygon([pt.point() for pt in vx.vertices])
 
 
+def compute_visibility_polygon(
+        ego_point: Tuple[float, float],
+        occluders: List[Tuple[np.array, np.array]],
+        boundary: sg.Polygon
+) -> sg.Polygon:
+    ego_visi_arrangement = sg.arrangement.Arrangement()
+    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
+     for occluder_coords in occluders]
+    [ego_visi_arrangement.insert(segment) for segment in list(boundary.edges)]
+
+    return visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
+
+
 def trajectory_2_segment2_list(traj: np.array) -> List[sg.Segment2]:
     segments = []
     for idx in range(traj.shape[0] - 1):
