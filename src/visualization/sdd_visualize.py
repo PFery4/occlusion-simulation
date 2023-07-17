@@ -101,12 +101,28 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
     color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["agents"]))))
-    for agent in instance_dict["agents"]:
+    past_masks = instance_dict.get(
+        "past_occlusion_masks",
+        [np.ones(len(instance_dict["past_window"])).astype(bool)] * len(instance_dict["agents"])
+    )
+    future_masks = instance_dict.get(
+        "future_occlusion_masks",
+        [np.ones(len(instance_dict["future_window"])).astype(bool)] * len(instance_dict["agents"])
+    )
+    for agent, past_mask, future_mask in zip(instance_dict["agents"], past_masks, future_masks):
         c = next(color_iter).reshape(1, -1)
         past = agent.get_traj_section(time_window=instance_dict["past_window"])
         future = agent.get_traj_section(
             time_window=np.array([instance_dict["past_window"][-1]] + list(instance_dict["future_window"]))
         )
+        full = agent.get_traj_section(
+            time_window=np.concatenate((instance_dict["past_window"], instance_dict["future_window"]))
+        )
+        full_mask = np.concatenate((past_mask, future_mask))
+
+        occluded = full[~full_mask]
+        draw_ax.scatter(occluded[:, 0], occluded[:, 1],
+                        s=50, marker="x", color="black", alpha=0.9)
 
         draw_ax.plot(past[:, 0], past[:, 1], color=c)
         draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", color=c)
@@ -132,13 +148,13 @@ def visualize_occlusion_map(draw_ax: matplotlib.axes.Axes, instance_dict: dict) 
         (float(instance_dict["image_tensor"].shape[1]),
          float(instance_dict["image_tensor"].shape[2]))
     )
-    ego_visi_arrangement = sg.arrangement.Arrangement()
-    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
-     for occluder_coords in instance_dict["occluders"]]
-    [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
 
-    ego_visipoly = simple_occlusion.visibility_polygon(ego_point=instance_dict["ego_point"],
-                                                       arrangement=ego_visi_arrangement)
+    ego_visipoly = simple_occlusion.compute_visibility_polygon(
+        ego_point=instance_dict["ego_point"],
+        occluders=instance_dict["occluders"],
+        boundary=scene_boundary
+    )
+
     occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
     [plot_sg_polygon(ax=draw_ax, poly=poly, edgecolor="red", facecolor="red", alpha=0.2)
      for poly in occluded_regions.polygons]
