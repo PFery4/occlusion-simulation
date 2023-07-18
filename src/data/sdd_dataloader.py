@@ -344,12 +344,16 @@ if __name__ == '__main__':
     dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     print(f"{len(dataset)=}")
 
+    print(f"{dataset.__class__}.__getitem__() dictionary keys:")
+    [print(k) for k in dataset.__getitem__(0).keys()]
+    print()
+
     n_rows = 2
     n_cols = 2
 
     ##################################################################################################################
     fig, axes = plt.subplots(n_rows, n_cols)
-    fig.canvas.manager.set_window_title("StanfordDroneDataset.__getitem__()")
+    fig.canvas.manager.set_window_title(f"{dataset.__class__}.__getitem__()")
 
     idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
 
