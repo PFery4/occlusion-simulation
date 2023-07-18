@@ -126,7 +126,9 @@ def trajectory_buffers(
 ) -> List[sg.Polygon]:
     if time_window is not None:
         return [
-            type_conv.shapely_poly_2_skgeom_poly(sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius))
+            type_conv.shapely_poly_2_skgeom_poly(
+                sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius)
+            )
             for agent in agent_list
         ]
     return [
