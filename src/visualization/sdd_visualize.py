@@ -9,7 +9,8 @@ import skgeom as sg
 
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
-import src.occlusion_simulation.simple_occlusion as simple_occlusion
+import src.occlusion_simulation.polygon_generation as poly_gen
+import src.occlusion_simulation.visibility as visibility
 from src.visualization.plot_utils import plot_sg_polygon
 
 SDD_CLASS_SYMBOLS = {'Pedestrian': 'P',     # pedestrian
@@ -140,12 +141,12 @@ def visualize_occlusion_map(draw_ax: matplotlib.axes.Axes, instance_dict: dict) 
                      [occluder[0][1], occluder[1][1]],
                      color="black")
 
-    scene_boundary = simple_occlusion.default_rectangle(
+    scene_boundary = poly_gen.default_rectangle(
         (float(instance_dict["image_tensor"].shape[1]),
          float(instance_dict["image_tensor"].shape[2]))
     )
 
-    ego_visipoly = simple_occlusion.compute_visibility_polygon(
+    ego_visipoly = visibility.compute_visibility_polygon(
         ego_point=instance_dict["ego_point"],
         occluders=instance_dict["occluders"],
         boundary=scene_boundary

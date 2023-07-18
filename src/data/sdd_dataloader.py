@@ -11,7 +11,8 @@ import uuid
 from typing import List, Tuple
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
-import src.occlusion_simulation.simple_occlusion as simple_occlusion
+import src.occlusion_simulation.polygon_generation as poly_gen
+import src.occlusion_simulation.visibility as visibility
 
 
 class StanfordDroneAgent:
@@ -312,14 +313,14 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
     @staticmethod
     def occlusion_masks(agents: List[StanfordDroneAgent],
-                            time_window: np.array,
-                            ego_point: np.array,
-                            occluders: List[Tuple[np.array, np.array]],
-                            scene_image_dims: Tuple[float, float]) -> List[np.array]:
-        ego_visipoly = simple_occlusion.compute_visibility_polygon(
+                        time_window: np.array,
+                        ego_point: np.array,
+                        occluders: List[Tuple[np.array, np.array]],
+                        scene_image_dims: Tuple[float, float]) -> List[np.array]:
+        ego_visipoly = visibility.compute_visibility_polygon(
             ego_point=ego_point,
             occluders=occluders,
-            boundary=simple_occlusion.default_rectangle(scene_image_dims)
+            boundary=poly_gen.default_rectangle(scene_image_dims)
         )
 
         agent_masks = []
