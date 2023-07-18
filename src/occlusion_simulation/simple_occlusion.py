@@ -1,440 +1,17 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as sp
-import shapely.ops as spops
 import skgeom as sg
 import functools
 import itertools
-from scipy.interpolate import interp1d
-from typing import List, Tuple, Union
+from typing import List, Tuple
+import src.occlusion_simulation.polygon_generation as poly_gen
+import src.occlusion_simulation.type_conversion as type_conv
+import src.occlusion_simulation.polygon_operation as poly_op
+import src.occlusion_simulation.agent_operation as agent_op
+import src.occlusion_simulation.visibility as visibility
 import src.data.sdd_extract as sdd_extract
 from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
-
-
-# def point_between(point_1: np.array, point_2: np.array, k: float) -> np.array:
-#     # k between 0 and 1, point_1 and point_2 of same shape
-#     return k * point_1 + (1 - k) * point_2
-
-
-def rotation_matrix(theta: float) -> np.array:
-    # angle in radians
-    return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-
-
-def bounded_wedge(p: np.array, u: np.array, theta: float, boundary: sg.Polygon) -> sg.Polygon:
-    """
-    generates the polygon corresponding to a section of the plane bounded by:
-    - a wedge described by two lines, intersecting at point p, such that their bisector points towards unit vector u.
-    the angle of the lines with respect to the bisector is equal to theta.
-    - frame_box, a polygon which contains point p.
-    """
-    big_vec = -u * 2 * np.max(boundary.coords)        # large vector, to guarantee cone is equivalent to infinite
-    p1 = p + rotation_matrix(theta) @ big_vec         # CCW
-    p2 = p + rotation_matrix(-theta) @ big_vec        # CW
-    p3 = p1 + big_vec
-    p4 = p2 + big_vec
-    [out] = sg.boolean_set.intersect(sg.Polygon([p, p2, p4, p3, p1]), boundary)
-    return out.outer_boundary()
-
-
-def polygon_triangulate(polygon: sp.Polygon) -> List[sp.Polygon]:
-    """
-    'Naïve' polygon triangulation of the input. The triangulate function from shapely.ops does not guarantee proper
-    triangulation of non-convex polygons with interior holes. This method permits this guarantee by performing
-    triangulation on the union of points belonging to the polygon, and the points of the polygon's voronoi diagram.
-    """
-    voronoi_edges = spops.voronoi_diagram(polygon, edges=True).intersection(polygon)
-    # delaunay triangulation of every point (both from voronoi diagram and the polygon itself)
-    candidate_triangles = spops.triangulate(sp.GeometryCollection([voronoi_edges, polygon]))
-    # keep only triangles inside original polygon
-    return [triangle for triangle in candidate_triangles if triangle.centroid.within(polygon)]
-
-
-def random_points_in_triangle(triangle: sg.Polygon, k: int = 1) -> np.array:
-    # inspired by: https://stackoverflow.com/a/47418580
-    x = np.sort(np.random.rand(2, k), axis=0)
-    return triangle.coords.transpose() @ np.array([x[0], x[1]-x[0], 1.0-x[1]])
-
-
-def random_points_in_triangles_collection(triangles: List[sg.Polygon], k: int) -> np.array:
-    proportions = np.array([float(tri.area()) for tri in triangles])
-    proportions /= sum(proportions)         # make a vector of probabilities
-    triangles = [skgeom_poly_2_shapely_poly(sg.PolygonWithHoles(tri, [])) for tri in triangles]
-    points = np.array(
-        [random_points_in_triangle(triangles[idx]) for idx in
-         np.random.choice(len(triangles), size=k, p=proportions)]
-    ).reshape((k, 2))
-    return points
-
-
-def sample_triangles(triangles: List[sg.Polygon], k: int = 1) -> List[sg.Polygon]:
-    proportions = np.array([float(tri.area()) for tri in triangles])
-    proportions /= sum(proportions)         # make a vector of probabilities
-    return [triangles[idx] for idx in np.random.choice(len(triangles), size=k, p=proportions)]
-
-
-# def random_interpolated_point(traj_seq: np.array, timestep_bounds: Tuple[int, int]):
-#     """
-#     sample a random point among the interpolated sequence of coordinates traj_seq. the point will lie within the
-#     interval specified by timestep_bounds (both inclusive)
-#     :param traj_seq: shape [Timesteps, Dimensions]
-#     :param timestep_bounds: tuple (begin, end)
-#     """
-#     t_idx = np.random.randint(timestep_bounds[0], timestep_bounds[1]-1)
-#     return point_between(traj_seq[t_idx], traj_seq[t_idx+1], np.random.random())
-
-
-def default_rectangle(corner_coords: Tuple[float, float]) -> sg.Polygon:
-    """
-    WARNING: having any of the two input values equal to 0.0 can result in errors
-    :param corner_coords: tuple [height, width], as can be extracted from an image torch.Tensor of shape [C, H, W]
-    """
-    y, x = corner_coords
-    return sg.Polygon([[0, 0], [x, 0], [x, y], [0, y]])
-
-
-def skgeom_extruded_polygon(polygon: sg.Polygon, d_border: float) -> sg.PolygonWithHoles:
-    skel = sg.skeleton.create_interior_straight_skeleton(polygon)
-    return functools.reduce(lambda a, b: sg.boolean_set.difference(a, b)[0], skel.offset_polygons(d_border), polygon)
-
-
-def target_agent_candidate_indices(
-        agent_list: List[StanfordDroneAgent],
-        full_window: np.array,
-        past_window: np.array
-) -> Tuple[np.array, np.array]:
-    """
-    returns a list of candidate agents to be the targets for occlusion simulation, with corresponding sampling
-    probabilities. target agents must be:
-    - in movement
-    - fully observed over the entire full_window
-    """
-
-    # checking that the target agents are fully observed over the entire window
-    # (in practice: [-T_obs:T_pred+1], INCLUDING the +1)
-    fully_observed = np.array([agent.get_traj_section(full_window).shape[0] == full_window.shape[0]
-                               for agent in agent_list])
-
-    # checking that the target agents are moving
-    distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in
-                          [agent.get_traj_section(past_window) for agent in agent_list]])
-    moving = (distances > 1e-8)
-    candidates = np.logical_and(fully_observed, moving)
-
-    #todo: add check that all subsequent positions are different
-
-    return np.asarray(candidates).nonzero()[0], distances[candidates]/sum(distances[candidates])
-
-
-def select_random_target_agents(
-        candidate_indices: np.array,
-        sampling_probabilities: np.array,
-        n: int = 1
-) -> np.array:
-    """
-    selects a random subset of agents present within the scene.
-    n agents will be sampled (possibly fewer if there aren't enough agents).
-    the output provides the indices in agent_list pointing at our target agents.
-    """
-    if n > len(candidate_indices):
-        # print(f"returning all available candidates: only {sum(is_moving)} moving agents in the scene")
-        return candidate_indices
-    return np.asarray(np.random.choice(candidate_indices, n, replace=False, p=sampling_probabilities))
-
-
-def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: float, angle: float) -> List[sg.Polygon]:
-    # offset: distance to pull the wedges "inward"
-    u_traj = np.array(traj[-1] - traj[0])
-    u_traj /= np.linalg.norm(u_traj)
-    wedge_1 = bounded_wedge(
-        p=(np.array(traj[0])) + u_traj * offset,
-        u=u_traj,
-        theta=float(np.radians(angle)),
-        boundary=boundary
-    )
-    wedge_2 = bounded_wedge(
-        p=(np.array(traj[-1])) - u_traj * offset,
-        u=-u_traj,
-        theta=float(np.radians(angle)),
-        boundary=boundary
-    )
-    return [wedge_1, wedge_2]
-
-
-def shapely_poly_2_skgeom_poly(poly: sp.Polygon) -> sg.Polygon:
-    return sg.Polygon([sg.Point2(*coord) for coord in poly.exterior.coords[:-1]][::-1])
-
-
-def skgeom_poly_2_shapely_poly(poly: sg.PolygonWithHoles) -> sp.Polygon:
-    return sp.Polygon(shell=poly.outer_boundary().coords, holes=[hole.coords for hole in poly.holes])
-
-
-def skgeom_approximate_circle(circ: sg.Circle2, n_segments: int = 100) -> sg.Polygon:
-    thetas = np.linspace(0, 2 * np.pi, num=n_segments, endpoint=False)
-    coords = [rotation_matrix(theta) @ np.array([circ.squared_radius(), 0]) +
-              np.array([circ.center().x(), circ.center().y()]) for theta in thetas]
-    return sg.Polygon([sg.Point2(*coord) for coord in coords])
-
-
-def visibility_polygon(ego_point: Tuple[float, float], arrangement: sg.arrangement.Arrangement) -> sg.Polygon:
-    visibility = sg.RotationalSweepVisibility(arrangement)
-    # visibility = sg.TriangularExpansionVisibility(arrangement)
-    origin = sg.Point2(*ego_point)
-    face = arrangement.find(origin)
-    vx = visibility.compute_visibility(origin, face)
-    # convert Arrangement to sg.Polygon
-    return sg.Polygon([pt.point() for pt in vx.vertices])
-
-
-def compute_visibility_polygon(
-        ego_point: Tuple[float, float],
-        occluders: List[Tuple[np.array, np.array]],
-        boundary: sg.Polygon
-) -> sg.Polygon:
-    ego_visi_arrangement = sg.arrangement.Arrangement()
-    [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
-     for occluder_coords in occluders]
-    [ego_visi_arrangement.insert(segment) for segment in list(boundary.edges)]
-
-    return visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
-
-
-def trajectory_2_segment2_list(traj: np.array) -> List[sg.Segment2]:
-    segments = []
-    for idx in range(traj.shape[0] - 1):
-        start = sg.Point2(traj[idx, 0], traj[idx, 1])
-        end = sg.Point2(traj[idx + 1, 0], traj[idx + 1, 1])
-        segments.append(sg.Segment2(start, end))
-    return segments
-
-
-def interpolate_trajectory(traj: np.array, dt: float = 1.0) -> np.array:
-    x = traj[:, 0]
-    y = traj[:, 1]
-
-    dist = np.cumsum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))
-    dist = np.concatenate([[0], dist])
-
-    interp_x = interp1d(dist, x)
-    interp_y = interp1d(dist, y)
-
-    new_dist = np.arange(0, dist[-1], dt)
-
-    new_x = interp_x(new_dist)
-    new_y = interp_y(new_dist)
-
-    return np.column_stack((new_x, new_y))
-
-
-def trajectory_buffers(
-        agent_list: List[StanfordDroneAgent],
-        time_window: Union[None, np.array],
-        buffer_radius: float
-) -> List[sg.Polygon]:
-    if time_window is not None:
-        return [
-            shapely_poly_2_skgeom_poly(sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius))
-            for agent in agent_list
-        ]
-    return [
-        shapely_poly_2_skgeom_poly(sp.LineString(agent.fulltraj).buffer(buffer_radius))
-        for agent in agent_list
-    ]
-
-
-def generate_occlusion_timesteps(
-        agent: StanfordDroneAgent, past_window: np.array, future_window: np.array,
-        min_obs: int, min_reobs: int, tol: float = 1e-8
-) -> Tuple[int, int]:
-
-    full_window = np.concatenate([past_window, future_window])
-    full_traj = agent.get_traj_section(full_window)
-    displacements = np.linalg.norm(full_traj[1:] - full_traj[:-1], axis=1)
-    moving = (displacements >= tol)
-    past_mask = np.in1d(full_window, past_window)
-    past_mask[:min_obs-1] = False
-    past_occl_indices = np.nonzero(np.logical_and(past_mask[:past_window.shape[0]], moving[:past_window.shape[0]]))[0]
-    t_occl = int(np.random.choice(past_occl_indices))
-
-    future_mask = np.in1d(full_window, future_window)
-    if min_reobs != 0:
-        future_mask[-min_reobs:] = False
-    future_occl_indices = np.nonzero(np.logical_and(
-        future_mask[-future_window.shape[0]:], moving[-future_window.shape[0]:]
-    ))[0]
-
-    t_disoccl = int(np.random.choice(future_occl_indices) + past_window.shape[0])
-
-    # for agent in range(n_agents):
-    #     t_occl = np.random.randint(min_obs - 1, T_obs - 1)
-    #     t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
-    #     occlusion_windows.append((t_occl, t_disoccl))
-    return t_occl, t_disoccl
-
-
-def instantaneous_visibility_polygons(
-        agents: List[StanfordDroneAgent],
-        target_agent_indices: List[int],
-        agent_radius: float,
-        interp_dt: float,
-        time_window: np.array,
-        boundary: sg.Polygon
-) -> List[sg.PolygonSet]:
-    # TODO: ONLY AS AN OPTIONAL IMPROVEMENT IF WE HAVE NOTHING TO DO AT SOME POINT.
-    # TODO: Maybe improve for better runtime (by linetracing for t=-T_obs and t=0, then buffering with -d_agent using
-    # TODO: shapely. This prevents the necessity to compute the visibility polygon at every timestep.
-    # TODO: WIP WIP WIP, FRAGMENTED VISIPOLYGONS (reason unknown)
-    target_visipolys = []
-
-    for idx in target_agent_indices:
-        other_agents = agents.copy()
-        other_agents.pop(idx)
-
-        target_traj = agents[idx].get_traj_section(time_window)
-
-        other_trajs = np.array([agent.get_traj_section(time_window) for agent in other_agents])
-        other_vecs = other_trajs - target_traj
-        other_us = other_vecs / np.sqrt(np.einsum('...i,...i', other_vecs, other_vecs))[..., np.newaxis]
-        out_points = other_trajs + 3000 * other_us
-
-        # print(target_traj.shape)
-        # print(other_trajs.shape)
-        # print(other_vecs.shape)
-        # print(other_vecs[0])
-        # print(other_us[0])
-        # print(other_us.shape)
-        # print(out_points[0])
-        shifted_points = np.roll(other_trajs, -1, axis=1)
-        other_segments = np.stack([other_trajs, shifted_points], axis=-1).transpose((0, 1, 3, 2))
-        print(other_trajs[0][0])
-        print(shifted_points[0][0])
-
-        out_shifted = np.roll(out_points, -1, axis=1)
-        out_segments = np.stack([out_points, out_shifted], axis=-1).transpose((0, 1, 3, 2))
-        print(out_points[0][0])
-        print(out_shifted[0][0])
-
-        poly_block = np.stack([other_trajs, shifted_points, out_shifted, out_points], axis=-1).transpose((0, 1, 3, 2))
-        print(poly_block[0][0])
-        print(poly_block.shape)
-        poly_block = poly_block[:, :-1, :, :]
-        print(poly_block.shape)
-
-        occl_polys = []
-        for other_agent in poly_block:
-            # polygons = [sg.Polygon(np.unique(poly_line, axis=0)) for poly_line in other_agent]
-            polygons = [shapely_poly_2_skgeom_poly(sp.Polygon(np.unique(poly_line, axis=0)).buffer(agent_radius))
-                        for poly_line in other_agent]
-
-            # print(polygons[0])
-            # print(polygons_sp[0])
-            # print(zblu)
-            # [poly.reverse_orientation() for poly in polygons if poly.orientation() == sg.Sign.CLOCKWISE]
-            # [print(poly.orientation()) for poly in polygons]
-            occl_poly = functools.reduce(
-                lambda poly_a, poly_b: sg.boolean_set.join(poly_a, poly_b),
-                polygons
-            )
-            # print(occl_poly)
-            # print(type(occl_poly))
-            occl_polys.append(occl_poly)
-        occl_polys = sg.PolygonSet(occl_polys)
-        visi_poly = sg.PolygonSet(boundary).difference(occl_polys)
-        # print(visi_poly)
-        # print(type(visi_poly))
-        # print(len(visi_poly.polygons))
-        # print(visi_poly.polygons)
-        # print(zblu)
-        target_visipolys.append(visi_poly)
-
-    # print(target_visipolys)
-    # print(zblu)
-
-    return target_visipolys
-
-
-def trajectory_visibility_polygons(
-        agents: List[StanfordDroneAgent],
-        target_agent_indices: List[int],
-        agent_visipoly_buffers: List[sg.Polygon],
-        time_window: np.array,
-        boundary: sg.Polygon
-) -> List[sg.PolygonSet]:
-    """
-    For each target agent, compute the regions in space from which their full trajectory can be observed without
-    obstruction from other agent's trajectories. This is performed by intersecting the visibility polygons for each of
-    that agent's trajectory coordinates, with the occluders being the remaining agents.
-
-    :param agents: the full list of agents present in the scene.
-    :param target_agent_indices: the indices within agents to consider as target agents (and for which to generate a
-    trajectory visibility polygon)
-    :param agent_visipoly_buffers: polygon representation of agents' trajectories (used as occluders)
-    :param time_window: time window to consider for the target agent
-    :param boundary: exterior boundary, necessary to limit the visibility polygon.
-    :return: a list containing the trajectory visibility polygons for each of the target agents
-    """
-    trajectory_visipolys = []
-    for idx in target_agent_indices:
-        traj = agents[idx].get_traj_section(time_window)
-
-        # to generate the regions within which every coordinate of the target agent is visible, we first need
-        # the buffers of every *other* agent
-        other_buffers = agent_visipoly_buffers.copy()
-        other_buffers.pop(idx)
-
-        # creating the sg.arrangement.Arrangement object necessary to compute the visibility polygons
-        scene_segments = list(boundary.edges)
-        [scene_segments.extend(poly.edges) for poly in other_buffers]
-        scene_arr = sg.arrangement.Arrangement()
-        [scene_arr.insert(seg) for seg in scene_segments]
-
-        # generating visibility polygons along every position of the target agent's trajectory,
-        # and computing the intersection of all those visibility polygons: this corresponds to the regions in
-        # the scene from which every coordinate of the target agent can be seen.
-        traj_fully_observable = functools.reduce(
-            lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
-            [sg.PolygonSet(visibility_polygon(point, arrangement=scene_arr))
-             for point in interpolate_trajectory(traj, dt=10)]
-        )
-        trajectory_visipolys.append(traj_fully_observable)
-
-    return trajectory_visipolys
-
-
-def triangulate_polyset(polyset: sg.PolygonSet) -> List[sg.Polygon]:
-    triangles = list(itertools.chain(*[
-        polygon_triangulate(skgeom_poly_2_shapely_poly(poly)) for poly in polyset.polygons
-    ]))
-    return [shapely_poly_2_skgeom_poly(triangle) for triangle in triangles]
-
-
-def verify_target_agents_occlusion_pattern(
-        visibility_polygon: sg.Polygon,
-        full_window: np.array,
-        agents: List[StanfordDroneAgent],
-        target_agent_indices: List[int],
-        occlusion_windows: List[Tuple[int, int]],
-):
-    """
-    for each target agent, verify that the agent follows the occlusion pattern visible -> occluded -> visible, according
-    to the selected occlusion windows.
-    """
-    patterns_correct = []
-    for target_idx, occl_window in zip(target_agent_indices, occlusion_windows):
-        visi_pattern_expected = np.ones_like(full_window)
-        visi_pattern_expected[occl_window[0]+1:occl_window[1]] = 0
-        visi_pattern_expected = visi_pattern_expected.astype(bool)
-
-        agent = agents[target_idx]
-        fulltraj = agent.get_traj_section(full_window)
-        visi_pattern_sim = np.array(
-            [visibility_polygon.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
-             for point in fulltraj], dtype=bool
-        )
-
-        pattern_correct = all(visi_pattern_sim == visi_pattern_expected)
-        patterns_correct.append(pattern_correct)
-    return patterns_correct
 
 
 def simulate_occlusions(
@@ -488,28 +65,28 @@ def simulate_occlusions(
 
     # set safety perimeter around the edges of the scene
     d_border_px = int((d_border/100 * np.linalg.norm(image_res)) // 10 * 11)
-    scene_boundary = default_rectangle(image_res)
-    frame_box = skgeom_extruded_polygon(scene_boundary, d_border=d_border_px)
+    scene_boundary = poly_gen.default_rectangle(image_res)
+    frame_box = poly_op.skgeom_extruded_polygon(scene_boundary, d_border=d_border_px)
     simulation_dict["frame_box"] = frame_box
 
     # define agent_buffers, a list of sg.Polygons
     # corresponding to the past trajectories of every agent, inflated by some small radius (used for computation of
     # visibility polygons, in order to place the ego_point)
-    agent_visipoly_buffers = trajectory_buffers(agents, past_window, r_agents)
+    agent_visipoly_buffers = agent_op.trajectory_buffers(agents, past_window, r_agents)
     simulation_dict["agent_visipoly_buffers"] = agent_visipoly_buffers
 
     # define no_ego_buffers, a list of sg.Polygons, within which we wish not to place the ego
-    no_ego_buffers = trajectory_buffers(agents, full_window[:-1], d_min_ag_ego)
+    no_ego_buffers = agent_op.trajectory_buffers(agents, full_window[:-1], d_min_ag_ego)
     no_ego_buffers = sg.PolygonSet(no_ego_buffers)
     simulation_dict["no_ego_buffers"] = no_ego_buffers
 
     # define no_occluder_zones, a list of sg.Polygons, within which we wish not to place any virtual occluder
-    no_occluder_buffers = trajectory_buffers(agents, full_window[:-1], d_min_occl_ag)
+    no_occluder_buffers = agent_op.trajectory_buffers(agents, full_window[:-1], d_min_occl_ag)
     simulation_dict["no_occluder_buffers"] = no_occluder_buffers
 
     # BEGINNING OF CHECK FOR VALIDITY OF EGO PLACEMENT ##############################################################
     # choose agents within the scene whose trajectory we would like to occlude virtually
-    target_agent_candidates, target_probabilities = target_agent_candidate_indices(agents, full_window, past_window)
+    target_agent_candidates, target_probabilities = agent_op.target_agent_candidate_indices(agents, full_window, past_window)
     if np.size(target_agent_candidates) == 0:
         raise ValueError("No valid candidates available for occlusion simulation.")
 
@@ -519,7 +96,7 @@ def simulate_occlusions(
     yes_ego_triangles = []
 
     while np.size(target_agent_candidates) != 0 and len(yes_ego_triangles) == 0:
-        target_agent_indices = select_random_target_agents(
+        target_agent_indices = agent_op.select_random_target_agents(
             target_agent_candidates, target_probabilities, n=1
         )
 
@@ -527,7 +104,7 @@ def simulate_occlusions(
         # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
         # with the target agents' trajectories
         no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
-            target_agent_no_ego_wedges(
+            agent_op.target_agent_no_ego_wedges(
                 scene_boundary, agents[idx].get_traj_section(full_window[:-1]), d_min_ag_ego, taper_angle
             )
             for idx in target_agent_indices
@@ -536,7 +113,7 @@ def simulate_occlusions(
         # list: a given item is a sg.PolygonSet, which describes the regions in space from which
         # every timestep of that agent can be directly observed, unobstructed by other agents
         # (specifically, by their agent_buffer)
-        targets_fullobs_regions = trajectory_visibility_polygons(
+        targets_fullobs_regions = agent_op.trajectory_visibility_polygons(
             agents=agents,
             target_agent_indices=target_agent_indices,
             agent_visipoly_buffers=agent_visipoly_buffers,
@@ -563,7 +140,7 @@ def simulate_occlusions(
         # we will need to triangulate those regions in order to sample a point
         # this can't be done in scikit-geometry (maybe it can?), so we're doing it with shapely instead
         # (see inside triangulate_polyset function)
-        yes_ego_triangles = triangulate_polyset(
+        yes_ego_triangles = poly_op.triangulate_polyset(
             targets_fullobs_regions.difference(
                 no_ego_buffers.union(no_ego_wedges).union(frame_box)
             )
@@ -590,7 +167,7 @@ def simulate_occlusions(
     # each item provides two timesteps for each target agent:
     # - the first one corresponds to the last observed timestep before occlusion
     # - the second one corresponds to the first re-observed timestep before reappearance
-    occlusion_windows = [generate_occlusion_timesteps(
+    occlusion_windows = [agent_op.generate_occlusion_timesteps(
         agent=agents[idx],
         past_window=past_window,
         future_window=np.concatenate([future_window, [2 * future_window[-1] - future_window[-2]]]),
@@ -620,10 +197,10 @@ def simulate_occlusions(
     while trial < 5 and not all(valid_occlusion_patterns):
         # print(f"{trial=}")
         # produce an ego_point from yes_ego_triangles
-        ego_point = random_points_in_triangle(*sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
+        ego_point = poly_op.random_points_in_triangle(*poly_op.sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
 
         # draw circle around the ego_point
-        ego_buffer = shapely_poly_2_skgeom_poly(sp.Point(*ego_point).buffer(d_min_occl_ego))
+        ego_buffer = type_conv.shapely_poly_2_skgeom_poly(sp.Point(*ego_point).buffer(d_min_occl_ego))
 
         # ITERATE OVER TARGET AGENTS
         p1_area = []
@@ -652,11 +229,11 @@ def simulate_occlusions(
                 sg.PolygonSet(no_occluder_buffers + [ego_buffer]))
 
             # triangulate the resulting region
-            p1_triangles = triangulate_polyset(p1_ego_traj_triangle)
+            p1_triangles = poly_op.triangulate_polyset(p1_ego_traj_triangle)
             p1_triangles.extend(p1_triangles)
 
             # sample our first occluder wall coordinate from the region
-            p1 = random_points_in_triangle(*sample_triangles(p1_triangles, k=1), k=1)
+            p1 = poly_op.random_points_in_triangle(*poly_op.sample_triangles(p1_triangles, k=1), k=1)
 
             # compute the visibility polygon of this point (corresponds to the regions in space that can be linked to
             # the point with a straight line
@@ -665,7 +242,7 @@ def simulate_occlusions(
             visi_occl_arr = sg.arrangement.Arrangement()
             [visi_occl_arr.insert(seg) for seg in no_occl_segments]
 
-            p1_visipoly = visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
+            p1_visipoly = visibility.visibility_polygon(ego_point=p1, arrangement=visi_occl_arr)
             p1_visipolys.append(p1_visipoly)
 
             p2_ego_traj_triangle = sg.Polygon(np.array(
@@ -680,10 +257,10 @@ def simulate_occlusions(
 
             p2_ego_traj_triangle = sg.PolygonSet(p2_ego_traj_triangle).intersection(p1_visipoly)
 
-            p2_triangles = triangulate_polyset(p2_ego_traj_triangle)
+            p2_triangles = poly_op.triangulate_polyset(p2_ego_traj_triangle)
             p2_triangles.extend(p2_triangles)
 
-            p2 = random_points_in_triangle(sample_triangles(p2_triangles, k=1)[0], k=1)
+            p2 = poly_op.random_points_in_triangle(poly_op.sample_triangles(p2_triangles, k=1)[0], k=1)
 
             occluders.append((p1, p2))
 
@@ -692,10 +269,10 @@ def simulate_occlusions(
          for occluder_coords in occluders]
         [ego_visi_arrangement.insert(segment) for segment in list(scene_boundary.edges)]
 
-        ego_visipoly = visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
+        ego_visipoly = visibility.visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
 
         # verify we do obtain the desired observable -> occluded -> observable pattern
-        valid_occlusion_patterns = verify_target_agents_occlusion_pattern(
+        valid_occlusion_patterns = agent_op.verify_target_agents_occlusion_pattern(
             visibility_polygon=ego_visipoly,
             full_window=full_window[:-1],
             agents=agents,
@@ -844,18 +421,18 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     polysg = sg.Polygon([sg.Point2(0, 0), sg.Point2(0, 1), sg.Point2(1, 1), sg.Point2(1, 0)])
     polysg = sg.PolygonWithHoles(polysg, [])
     for i in range(n_iterations):
-        skgeom_poly_2_shapely_poly(polysg)
+        type_conv.skgeom_poly_2_shapely_poly(polysg)
     print(f"skgeom 2 shapely polygon conversion: {time() - before}")
 
     before = time()
     polysp = sp.Polygon([[0, 0], [0, 1], [1, 1], [1, 0]])
     for i in range(n_iterations):
-        shapely_poly_2_skgeom_poly(polysp)
+        type_conv.shapely_poly_2_skgeom_poly(polysp)
     print(f"shapely 2 skgeom polygon conversion: {time() - before}")
 
     before = time()
     for i in range(n_iterations):
-        default_rectangle(instance_dict["image_tensor"].shape[1:])
+        poly_gen.default_rectangle(instance_dict["image_tensor"].shape[1:])
     print(f"default rectangle: {time() - before}")
 
 
@@ -874,6 +451,7 @@ def show_simulation():
     instance_dict = dataset.__getitem__(instance_idx)
 
     fig, ax = plt.subplots()
+    sdd_visualize.draw_map(draw_ax=ax, image_tensor=instance_dict["image_tensor"])
     sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
@@ -897,5 +475,5 @@ def show_simulation():
 
 
 if __name__ == '__main__':
-    # show_simulation()
-    runsim_on_entire_dataset()
+    show_simulation()
+    # runsim_on_entire_dataset()
