@@ -270,6 +270,9 @@ def visualize_random_simulation_samples(
 
         except Exception as ex:
             logger.exception("\n\nSimulation Failed:\n")
-            ax_i.text(sum(ax_i.get_xlim())/2, sum(ax_i.get_ylim())/2, "FAILED", fontsize=20, c="red", horizontalalignment="center", verticalalignment="center")
+            ax_i.text(
+                sum(ax_i.get_xlim())/2, sum(ax_i.get_ylim())/2, "FAILED",
+                fontsize=20, c="red", horizontalalignment="center", verticalalignment="center"
+            )
 
     plt.show()
