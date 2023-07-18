@@ -2,9 +2,11 @@ import numpy as np
 from scipy.interpolate import interp1d
 import skgeom as sg
 import shapely.geometry as sp
+import functools
 from typing import List, Tuple, Union
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.occlusion_simulation.type_conversion as type_conv
+import src.occlusion_simulation.visibility as visibility
 from src.data.sdd_dataloader import StanfordDroneAgent
 
 
@@ -135,6 +137,134 @@ def trajectory_buffers(
         type_conv.shapely_poly_2_skgeom_poly(sp.LineString(agent.fulltraj).buffer(buffer_radius))
         for agent in agent_list
     ]
+
+
+def instantaneous_visibility_polygons(
+        agents: List[StanfordDroneAgent],
+        target_agent_indices: List[int],
+        agent_radius: float,
+        interp_dt: float,
+        time_window: np.array,
+        boundary: sg.Polygon
+) -> List[sg.PolygonSet]:
+    # TODO: ONLY AS AN OPTIONAL IMPROVEMENT IF WE HAVE NOTHING TO DO AT SOME POINT.
+    # TODO: Maybe improve for better runtime (by linetracing for t=-T_obs and t=0, then buffering with -d_agent using
+    # TODO: shapely. This prevents the necessity to compute the visibility polygon at every timestep.
+    # TODO: WIP WIP WIP, FRAGMENTED VISIPOLYGONS (reason unknown)
+    target_visipolys = []
+
+    for idx in target_agent_indices:
+        other_agents = agents.copy()
+        other_agents.pop(idx)
+
+        target_traj = agents[idx].get_traj_section(time_window)
+
+        other_trajs = np.array([agent.get_traj_section(time_window) for agent in other_agents])
+        other_vecs = other_trajs - target_traj
+        other_us = other_vecs / np.sqrt(np.einsum('...i,...i', other_vecs, other_vecs))[..., np.newaxis]
+        out_points = other_trajs + 3000 * other_us
+
+        # print(target_traj.shape)
+        # print(other_trajs.shape)
+        # print(other_vecs.shape)
+        # print(other_vecs[0])
+        # print(other_us[0])
+        # print(other_us.shape)
+        # print(out_points[0])
+        shifted_points = np.roll(other_trajs, -1, axis=1)
+        other_segments = np.stack([other_trajs, shifted_points], axis=-1).transpose((0, 1, 3, 2))
+        print(other_trajs[0][0])
+        print(shifted_points[0][0])
+
+        out_shifted = np.roll(out_points, -1, axis=1)
+        out_segments = np.stack([out_points, out_shifted], axis=-1).transpose((0, 1, 3, 2))
+        print(out_points[0][0])
+        print(out_shifted[0][0])
+
+        poly_block = np.stack([other_trajs, shifted_points, out_shifted, out_points], axis=-1).transpose((0, 1, 3, 2))
+        print(poly_block[0][0])
+        print(poly_block.shape)
+        poly_block = poly_block[:, :-1, :, :]
+        print(poly_block.shape)
+
+        occl_polys = []
+        for other_agent in poly_block:
+            # polygons = [sg.Polygon(np.unique(poly_line, axis=0)) for poly_line in other_agent]
+            polygons = [type_conv.shapely_poly_2_skgeom_poly(sp.Polygon(np.unique(poly_line, axis=0)).buffer(agent_radius))
+                        for poly_line in other_agent]
+
+            # print(polygons[0])
+            # print(polygons_sp[0])
+            # print(zblu)
+            # [poly.reverse_orientation() for poly in polygons if poly.orientation() == sg.Sign.CLOCKWISE]
+            # [print(poly.orientation()) for poly in polygons]
+            occl_poly = functools.reduce(
+                lambda poly_a, poly_b: sg.boolean_set.join(poly_a, poly_b),
+                polygons
+            )
+            # print(occl_poly)
+            # print(type(occl_poly))
+            occl_polys.append(occl_poly)
+        occl_polys = sg.PolygonSet(occl_polys)
+        visi_poly = sg.PolygonSet(boundary).difference(occl_polys)
+        # print(visi_poly)
+        # print(type(visi_poly))
+        # print(len(visi_poly.polygons))
+        # print(visi_poly.polygons)
+        # print(zblu)
+        target_visipolys.append(visi_poly)
+
+    # print(target_visipolys)
+    # print(zblu)
+    raise NotImplementedError       # return target_visipolys
+
+
+def trajectory_visibility_polygons(
+        agents: List[StanfordDroneAgent],
+        target_agent_indices: List[int],
+        agent_visipoly_buffers: List[sg.Polygon],
+        time_window: np.array,
+        boundary: sg.Polygon
+) -> List[sg.PolygonSet]:
+    """
+    For each target agent, compute the regions in space from which their full trajectory can be observed without
+    obstruction from other agent's trajectories. This is performed by intersecting the visibility polygons for each of
+    that agent's trajectory coordinates, with the occluders being the remaining agents.
+
+    :param agents: the full list of agents present in the scene.
+    :param target_agent_indices: the indices within agents to consider as target agents (and for which to generate a
+    trajectory visibility polygon)
+    :param agent_visipoly_buffers: polygon representation of agents' trajectories (used as occluders)
+    :param time_window: time window to consider for the target agent
+    :param boundary: exterior boundary, necessary to limit the visibility polygon.
+    :return: a list containing the trajectory visibility polygons for each of the target agents
+    """
+    trajectory_visipolys = []
+    for idx in target_agent_indices:
+        traj = agents[idx].get_traj_section(time_window)
+
+        # to generate the regions within which every coordinate of the target agent is visible, we first need
+        # the buffers of every *other* agent
+        other_buffers = agent_visipoly_buffers.copy()
+        other_buffers.pop(idx)
+
+        # creating the sg.arrangement.Arrangement object necessary to compute the visibility polygons
+        scene_segments = list(boundary.edges)
+        [scene_segments.extend(poly.edges) for poly in other_buffers]
+        scene_arr = sg.arrangement.Arrangement()
+        [scene_arr.insert(seg) for seg in scene_segments]
+
+        # generating visibility polygons along every position of the target agent's trajectory,
+        # and computing the intersection of all those visibility polygons: this corresponds to the regions in
+        # the scene from which every coordinate of the target agent can be seen.
+        traj_fully_observable = functools.reduce(
+            lambda polyset_a, polyset_b: polyset_a.intersection(polyset_b),
+            [sg.PolygonSet(visibility.visibility_polygon(point, arrangement=scene_arr))
+             for point in interpolate_trajectory(traj, dt=10)]
+        )
+        trajectory_visipolys.append(traj_fully_observable)
+
+    return trajectory_visipolys
 
 
 def verify_target_agents_occlusion_pattern(
