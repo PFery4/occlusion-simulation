@@ -1,8 +1,29 @@
 import numpy as np
+from scipy.interpolate import interp1d
 import skgeom as sg
-from typing import List, Tuple
+import shapely.geometry as sp
+from typing import List, Tuple, Union
 import src.occlusion_simulation.polygon_generation as poly_gen
+import src.occlusion_simulation.type_conversion as type_conv
 from src.data.sdd_dataloader import StanfordDroneAgent
+
+
+def interpolate_trajectory(traj: np.array, dt: float = 1.0) -> np.array:
+    x = traj[:, 0]
+    y = traj[:, 1]
+
+    dist = np.cumsum(np.sqrt(np.diff(x)**2 + np.diff(y)**2))
+    dist = np.concatenate([[0], dist])
+
+    interp_x = interp1d(dist, x)
+    interp_y = interp1d(dist, y)
+
+    new_dist = np.arange(0, dist[-1], dt)
+
+    new_x = interp_x(new_dist)
+    new_y = interp_y(new_dist)
+
+    return np.column_stack((new_x, new_y))
 
 
 def target_agent_candidate_indices(
@@ -96,6 +117,22 @@ def generate_occlusion_timesteps(
     #     t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
     #     occlusion_windows.append((t_occl, t_disoccl))
     return t_occl, t_disoccl
+
+
+def trajectory_buffers(
+        agent_list: List[StanfordDroneAgent],
+        time_window: Union[None, np.array],
+        buffer_radius: float
+) -> List[sg.Polygon]:
+    if time_window is not None:
+        return [
+            type_conv.shapely_poly_2_skgeom_poly(sp.LineString(agent.get_traj_section(time_window)).buffer(buffer_radius))
+            for agent in agent_list
+        ]
+    return [
+        type_conv.shapely_poly_2_skgeom_poly(sp.LineString(agent.fulltraj).buffer(buffer_radius))
+        for agent in agent_list
+    ]
 
 
 def verify_target_agents_occlusion_pattern(
