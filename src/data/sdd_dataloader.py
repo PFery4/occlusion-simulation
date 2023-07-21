@@ -193,6 +193,7 @@ class StanfordDroneDataset(Dataset):
             "agents": agents,
             "past_window": window[:self.T_obs],
             "future_window": window[self.T_obs:],
+            "full_window": window,
             "image_tensor": image_tensor
         }
 
@@ -304,7 +305,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         instance_dict["full_window_occlusion_masks"] = self.occlusion_masks(
             agents=instance_dict["agents"],
-            time_window=np.concatenate((instance_dict["past_window"], instance_dict["future_window"])),
+            time_window=instance_dict["full_window"],
             ego_point=instance_dict["ego_point"],
             occluders=instance_dict["occluders"],
             scene_image_dims=tuple(instance_dict['image_tensor'].shape[1:])

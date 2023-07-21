@@ -115,7 +115,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
             time_window=np.array([instance_dict["past_window"][-1]] + list(instance_dict["future_window"]))
         )
         full = agent.get_traj_section(
-            time_window=np.concatenate((instance_dict["past_window"], instance_dict["future_window"]))
+            time_window=instance_dict["full_window"]
         )
         occluded = full[~full_mask]
         draw_ax.scatter(occluded[:, 0], occluded[:, 1],
