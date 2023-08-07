@@ -187,6 +187,7 @@ class StanfordDroneDataset(Dataset):
         #     is_fully_observed.append(False)
 
         instance_dict = {
+            "idx": idx,
             "scene": scene,
             "video": video,
             "timestep": timestep,
