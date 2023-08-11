@@ -262,7 +262,7 @@ def simulate_occlusions(
 
             p2 = poly_op.random_points_in_triangle(poly_op.sample_triangles(p2_triangles, k=1)[0], k=1)
 
-            occluders.append((p1, p2))
+            occluders.append((p1.flatten(), p2.flatten()))
 
         ego_visi_arrangement = sg.arrangement.Arrangement()
         [ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder_coords[0]), sg.Point2(*occluder_coords[1])))
