@@ -152,8 +152,8 @@ class StanfordDroneDataset(Dataset):
         image_path = os.path.join(self.root, "annotations", scene, video, "reference.jpg")
         assert os.path.exists(image_path)
         image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_tensor = self.img_transform(image)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)      # np.array [H, W, C]
+        # image_tensor = self.img_transform(image)            # torch.tensor [C, H, W]
 
         # generate a window of the timesteps we are interested in extracting from the scene dataset
         window = np.arange(self.T_obs + self.T_pred) * int(self.orig_fps // self.fps) + timestep
@@ -195,7 +195,7 @@ class StanfordDroneDataset(Dataset):
             "past_window": window[:self.T_obs],
             "future_window": window[self.T_obs:],
             "full_window": window,
-            "image_tensor": image_tensor
+            "scene_image": image,
         }
 
         return instance_dict
@@ -309,7 +309,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
             time_window=instance_dict["full_window"],
             ego_point=instance_dict["ego_point"],
             occluders=instance_dict["occluders"],
-            scene_image_dims=tuple(instance_dict['image_tensor'].shape[1:])
+            scene_image_dims=tuple(instance_dict['scene_image'].shape[:2])
         )
         return instance_dict
 
@@ -370,8 +370,8 @@ if __name__ == '__main__':
         print(f"getitem({idx}) took {time.time() - before} s")
 
         ax.title.set_text(idx)
-        sdd_visualize.draw_map(
-            draw_ax=ax, image_tensor=instance_dict["image_tensor"]
+        sdd_visualize.draw_map_numpy(
+            draw_ax=ax, scene_image=instance_dict["scene_image"]
         )
         if "ego_point" in instance_dict.keys():
             sdd_visualize.visualize_occlusion_map(

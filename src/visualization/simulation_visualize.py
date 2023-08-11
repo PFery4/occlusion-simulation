@@ -149,46 +149,46 @@ def visualize_occlusion_simulation(instance_dict: dict, simulation_dict: dict) -
 
     # I. agent buffers & frame_box
     fig1, ax1 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax1, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax1, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax1, instance_dict=instance_dict)
     plot_simulation_step_1(ax1, agent_visipoly_buffers, no_occluder_buffers, no_ego_buffers, frame_box)
 
     # II. target agents' occlusion timesteps, wedges and visibility polygons
     fig2, ax2 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax2, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax2, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax2, instance_dict=instance_dict)
     plot_simulation_step_2(ax2, agent_visipoly_buffers, no_ego_buffers, frame_box, no_ego_wedges,
                            targets_fullobs_regions, p_occls, p_disoccls)
 
     # III. triangulated ego regions, ego point, ego buffer, p1_ego_traj triangles
     fig3, ax3 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax3, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax3, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax3, instance_dict=instance_dict)
     plot_simulation_step_3(ax3, yes_ego_triangles, p_occls, p_disoccls, ego_point, no_occluder_buffers, ego_buffer,
                            p1_area)
 
     # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
     fig4, ax4 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax4, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax4, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax4, instance_dict=instance_dict)
     plot_simulation_step_4(ax4, p_occls, p_disoccls, ego_point, p1_triangles, p1s, p1_visipolys, p2_area)
 
     # V. triangulated p2_regions, p2
     fig5, ax5 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax5, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax5, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax5, instance_dict=instance_dict)
     plot_simulation_step_5(ax5, p_occls, p_disoccls, ego_point, p2_triangles, p1s, p2s)
 
     # VI. occluder, ego_point visibility
     fig6, ax6 = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax6, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax6, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(ax6, instance_dict=instance_dict)
     plot_simulation_step_6(ax6, p_occls, p_disoccls, ego_point, p1s, p2s, occluded_regions)
 
     # Everything in one picture
     gs_kw = dict(wspace=0.1, hspace=0.1)
     fig, axs = plt.subplots(nrows=2, ncols=3, gridspec_kw=gs_kw)
-    [sdd_visualize.draw_map(draw_ax=ax, image_tensor=instance_dict["image_tensor"]) for ax in axs.flatten()]
+    [sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"]) for ax in axs.flatten()]
     [sdd_visualize.visualize_training_instance(ax, instance_dict=instance_dict, lgnd=False)
      for ax in axs.reshape(-1)[:-1]]
     sdd_visualize.visualize_training_instance(axs[1, 2], instance_dict=instance_dict)
@@ -230,10 +230,10 @@ def visualize_random_simulation_samples(
 
         ax_i = axs[row, col]
 
-        sdd_visualize.draw_map(draw_ax=ax_i, image_tensor=instance_dict["image_tensor"])
+        sdd_visualize.draw_map_numpy(draw_ax=ax_i, scene_image=instance_dict["scene_image"])
         sdd_visualize.visualize_training_instance(draw_ax=ax_i, instance_dict=instance_dict)
 
-        img_tensor = instance_dict["image_tensor"]
+        img = instance_dict["scene_image"]
         agents = instance_dict["agents"]
         past_window = instance_dict["past_window"]
         future_window = instance_dict["future_window"]
@@ -241,7 +241,7 @@ def visualize_random_simulation_samples(
         try:
             simulation_dict = simulate_occlusions(
                 config=sim_config,
-                image_res=tuple(img_tensor.shape[1:]),
+                image_res=tuple(img.shape[:2]),
                 agents=agents,
                 past_window=past_window,
                 future_window=future_window

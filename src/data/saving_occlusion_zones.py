@@ -96,7 +96,7 @@ if __name__ == '__main__':
     visibility.compute_visibility_polygon(
         ego_point=instance_dict['ego_point'],
         occluders=instance_dict['occluders'],
-        boundary=poly_gen.default_rectangle(tuple(instance_dict['image_tensor'].shape[1:]))
+        boundary=poly_gen.default_rectangle(tuple(instance_dict['scene_image'].shape[:2]))
     )
     af = time.time()
     print(f"{bf - af=}")

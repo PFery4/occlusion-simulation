@@ -357,7 +357,7 @@ def runsim_on_entire_dataset() -> None:
         scene = instance_dict["scene"]
         video = instance_dict["video"]
         timestep = instance_dict["timestep"]
-        img_tensor = instance_dict["image_tensor"]
+        img = instance_dict["scene_image"]
         agents = instance_dict["agents"]
         past_window = instance_dict["past_window"]
         future_window = instance_dict["future_window"]
@@ -366,7 +366,7 @@ def runsim_on_entire_dataset() -> None:
             try:
                 simdict = simulate_occlusions(
                     config=config["occlusion_simulator"],
-                    image_res=tuple(img_tensor.shape[1:]),
+                    image_res=tuple(img.shape[:2]),
                     agents=agents,
                     past_window=past_window,
                     future_window=future_window
@@ -432,7 +432,7 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
     before = time()
     for i in range(n_iterations):
-        poly_gen.default_rectangle(instance_dict["image_tensor"].shape[1:])
+        poly_gen.default_rectangle(instance_dict["scene_image"].shape[:2])
     print(f"default rectangle: {time() - before}")
 
 
@@ -451,19 +451,19 @@ def show_simulation():
     instance_dict = dataset.__getitem__(instance_idx)
 
     fig, ax = plt.subplots()
-    sdd_visualize.draw_map(draw_ax=ax, image_tensor=instance_dict["image_tensor"])
+    sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"])
     sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
 
     # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
     sim_params = config["occlusion_simulator"]
-    img_tensor = instance_dict["image_tensor"]
+    img = instance_dict["scene_image"]
     agents = instance_dict["agents"]
     past_window = instance_dict["past_window"]
     future_window = instance_dict["future_window"]
 
     simulation_outputs = simulate_occlusions(
         config=sim_params,
-        image_res=tuple(img_tensor.shape[1:]),
+        image_res=tuple(img.shape[:2]),
         agents=agents,
         past_window=past_window,
         future_window=future_window

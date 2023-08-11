@@ -78,13 +78,24 @@ def draw_all_trajectories_onto_image(draw_ax: matplotlib.axes.Axes, traj_df: pd.
         draw_single_trajectory_onto_image(draw_ax=draw_ax, agent_df=agent_df, c=c)
 
 
-def draw_map(draw_ax: matplotlib.axes.Axes, image_tensor: torch.Tensor) -> None:
+def draw_map_torch(draw_ax: matplotlib.axes.Axes, image_tensor: torch.Tensor) -> None:
+    # image_tensor.shape = [C, H, W]
     # set the x and y axes
     draw_ax.set_xlim(0., image_tensor.shape[2])
     draw_ax.set_ylim(image_tensor.shape[1], 0.)
 
     # draw the reference image
     draw_ax.imshow(image_tensor.permute(1, 2, 0))
+
+
+def draw_map_numpy(draw_ax: matplotlib.axes.Axes, scene_image: np.array) -> None:
+    # scene_image.shape = [H, W, C]
+    # set the x and y axes
+    draw_ax.set_xlim(0., scene_image.shape[1])
+    draw_ax.set_ylim(scene_image.shape[0], 0.)
+
+    # draw the image
+    draw_ax.imshow(scene_image)
 
 
 def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict, lgnd: bool = True) -> None:
@@ -97,7 +108,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         - 'agents': a list of StanfordDroneAgent objects, instantiated through the class defined in sdd_dataloader.py
         - 'past_window': a numpy array of type 'int', indicating the timesteps corresponding to the observation window
         - 'future_window': a numpy array of type 'int', indicating the timesteps corresponding to the prediction horizon
-        - 'image_tensor': a torch tensor containing the reference image data
+        - 'scene_image': a numpy array containing the reference image data
     """
     # TODO: maybe add a check to draw partially observed trajectories in gray
 
@@ -142,8 +153,8 @@ def visualize_occlusion_map(draw_ax: matplotlib.axes.Axes, instance_dict: dict) 
                      color="black")
 
     scene_boundary = poly_gen.default_rectangle(
-        (float(instance_dict["image_tensor"].shape[1]),
-         float(instance_dict["image_tensor"].shape[2]))
+        (float(instance_dict["scene_image"].shape[0]),
+         float(instance_dict["scene_image"].shape[1]))
     )
 
     ego_visipoly = visibility.compute_visibility_polygon(
