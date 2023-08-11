@@ -1,6 +1,7 @@
 import numpy as np
 import skgeom as sg
 from typing import List, Tuple
+from src.data.sdd_agent import StanfordDroneAgent
 
 
 def visibility_polygon(ego_point: Tuple[float, float], arrangement: sg.arrangement.Arrangement) -> sg.Polygon:
@@ -24,3 +25,20 @@ def compute_visibility_polygon(
     [ego_visi_arrangement.insert(segment) for segment in list(boundary.edges)]
 
     return visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
+
+
+def occlusion_masks(
+        agents: List[StanfordDroneAgent],
+        time_window: np.array,
+        ego_visipoly: sg.Polygon,
+) -> np.array:
+
+    agent_masks = []
+    for agent in agents:
+        agent_mask = np.array([
+            ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
+            for point in agent.get_traj_section(time_window)
+        ])
+        agent_masks.append(agent_mask)
+
+    return np.stack(agent_masks)        # [N, T]

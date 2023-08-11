@@ -7,7 +7,7 @@ from typing import List, Tuple, Union
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.occlusion_simulation.type_conversion as type_conv
 import src.occlusion_simulation.visibility as visibility
-from src.data.sdd_dataloader import StanfordDroneAgent
+from src.data.sdd_agent import StanfordDroneAgent
 
 
 def interpolate_trajectory(traj: np.array, dt: float = 1.0) -> np.array:

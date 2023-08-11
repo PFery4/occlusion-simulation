@@ -11,7 +11,8 @@ import src.occlusion_simulation.polygon_operation as poly_op
 import src.occlusion_simulation.agent_operation as agent_op
 import src.occlusion_simulation.visibility as visibility
 import src.data.sdd_extract as sdd_extract
-from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneAgent
+from src.data.sdd_dataloader import StanfordDroneDataset
+from src.data.sdd_agent import StanfordDroneAgent
 
 
 def simulate_occlusions(
@@ -325,6 +326,7 @@ def runsim_on_entire_dataset() -> None:
     pkl_path = os.path.join(sim_folder, "simulation.pickle")
     json_path = os.path.join(sim_folder, "simulation.json")
     log_path = os.path.join(sim_folder, "simulation.log")
+    occl_path = os.path.join(sim_folder, "simulation_occlusions.pickle")
 
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)

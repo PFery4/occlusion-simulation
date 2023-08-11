@@ -9,34 +9,12 @@ import pickle
 import json
 import uuid
 from typing import List, Tuple
+from src.data.sdd_agent import StanfordDroneAgent
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
 import src.occlusion_simulation.polygon_generation as poly_gen
+import src.occlusion_simulation.agent_operation as agent_op
 import src.occlusion_simulation.visibility as visibility
-
-
-class StanfordDroneAgent:
-
-    def __init__(self, agent_df: pd.DataFrame):
-        self.id = agent_df["Id"].unique().item()
-        self.label = agent_df.iloc[0].loc["label"]
-        self.timesteps = agent_df["frame"].to_numpy()
-
-        self.fulltraj = np.empty((len(self.timesteps), 2))
-        self.fulltraj.fill(np.nan)
-        self.fulltraj[:, 0] = agent_df["x"].values.flatten()
-        self.fulltraj[:, 1] = agent_df["y"].values.flatten()
-
-        assert not np.isnan(self.fulltraj).any()
-
-    def get_traj_section(self, time_window: np.array) -> np.array:
-        return self.fulltraj[np.in1d(self.timesteps, time_window), :]
-
-    def position_at_timestep(self, timestep: int) -> np.array:
-        return self.fulltraj[np.where(self.timesteps == timestep)].reshape(2,)
-
-    def get_data_availability_mask(self, time_window: np.array) -> np.array:
-        return np.in1d(time_window, self.timesteps).astype(float)
 
 
 class StanfordDroneDataset(Dataset):
@@ -312,7 +290,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
             boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
         )
 
-        instance_dict["full_window_occlusion_masks"] = self.occlusion_masks(
+        instance_dict["full_window_occlusion_masks"] = visibility.occlusion_masks(
             agents=instance_dict["agents"],
             time_window=instance_dict["full_window"],
             ego_visipoly=ego_visipoly
@@ -323,21 +301,6 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         video_slice = self.occlusion_table.index.get_loc((sim_id, scene, video, timestep, trial))
         return int(video_slice)
 
-    @staticmethod
-    def occlusion_masks(
-            agents: List[StanfordDroneAgent],
-            time_window: np.array,
-            ego_visipoly: sg.Polygon,
-    ) -> List[np.array]:
-
-        agent_masks = []
-        for agent in agents:
-            agent_mask = np.array([
-                ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
-                for point in agent.get_traj_section(time_window)
-            ])
-            agent_masks.append(agent_mask)
-        return agent_masks
 
 
 if __name__ == '__main__':
