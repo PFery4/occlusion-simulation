@@ -299,31 +299,36 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         instance_dict = super(StanfordDroneDatasetWithOcclusionSim, self).__getitem__(lookup_idx)
 
+        instance_dict["sim_id"] = sim_id
+        instance_dict["trial"] = trial
         instance_dict["ego_point"] = occlusion_case["ego_point"]
         instance_dict["occluders"] = occlusion_case["occluders"]
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
 
+        ego_visipoly = visibility.compute_visibility_polygon(
+            ego_point=instance_dict["ego_point"],
+            occluders=instance_dict["occluders"],
+            boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
+        )
+
         instance_dict["full_window_occlusion_masks"] = self.occlusion_masks(
             agents=instance_dict["agents"],
             time_window=instance_dict["full_window"],
-            ego_point=instance_dict["ego_point"],
-            occluders=instance_dict["occluders"],
-            scene_image_dims=tuple(instance_dict['scene_image'].shape[:2])
+            ego_visipoly=ego_visipoly
         )
         return instance_dict
 
+    def find_occl_idx(self, sim_id: str, scene: str, video: str, timestep: int, trial: int) -> int:
+        video_slice = self.occlusion_table.index.get_loc((sim_id, scene, video, timestep, trial))
+        return int(video_slice)
+
     @staticmethod
-    def occlusion_masks(agents: List[StanfordDroneAgent],
-                        time_window: np.array,
-                        ego_point: np.array,
-                        occluders: List[Tuple[np.array, np.array]],
-                        scene_image_dims: Tuple[float, float]) -> List[np.array]:
-        ego_visipoly = visibility.compute_visibility_polygon(
-            ego_point=ego_point,
-            occluders=occluders,
-            boundary=poly_gen.default_rectangle(scene_image_dims)
-        )
+    def occlusion_masks(
+            agents: List[StanfordDroneAgent],
+            time_window: np.array,
+            ego_visipoly: sg.Polygon,
+    ) -> List[np.array]:
 
         agent_masks = []
         for agent in agents:
