@@ -295,6 +295,7 @@ def simulate_occlusions(
     simulation_dict["p2_area"] = p2_area
     simulation_dict["p2_triangles"] = p2_triangles
     simulation_dict["occluders"] = occluders
+    simulation_dict["ego_visipoly"] = ego_visipoly
     simulation_dict["occluded_regions"] = occluded_regions
 
     return simulation_dict
@@ -348,6 +349,7 @@ def runsim_on_entire_dataset() -> None:
         columns=["scene", "video", "timestep", "trial", "ego_point",
                  "occluders", "target_agent_indices", "occlusion_windows"]
     )
+    occlusion_masks = []
 
     errors = 0
     for idx in (pbar := tqdm(range(n_instances))):
@@ -384,6 +386,13 @@ def runsim_on_entire_dataset() -> None:
                     "target_agent_indices": simdict["target_agent_indices"],
                     "occlusion_windows": simdict["occlusion_windows"]
                 }
+
+                occlusion_masks.append(visibility.occlusion_masks(
+                    agents=agents,
+                    time_window=instance_dict["full_window"],
+                    ego_visipoly=simdict["ego_visipoly"]
+                ))
+
             except Exception as e:
                 errors += 1
                 logger.exception(f"\ninstance nr {idx} - trial nr {trial}:\n")
@@ -392,6 +401,9 @@ def runsim_on_entire_dataset() -> None:
             print(f"Saving simulation table to:\n{pkl_path}")
             with open(pkl_path, "wb") as f:
                 pickle.dump(occlusion_df, f)
+            print(f"Saving occlusion masks to:\n{occl_path}")
+            with open(occl_path, "wb") as f:
+                pickle.dump(occlusion_masks, f)
 
     end_msg = f"\n\nTOTAL NUMBER OF ERRORS: {errors} ({errors/(n_instances * n_sim_per_instance)*100}%)\n"
     print(end_msg)
@@ -404,6 +416,9 @@ def runsim_on_entire_dataset() -> None:
     print(f"Saving simulation table to:\n{pkl_path}")
     with open(pkl_path, "wb") as f:
         pickle.dump(occlusion_df, f)
+    print(f"Saving occlusion masks to:\n{occl_path}")
+    with open(occl_path, "wb") as f:
+        pickle.dump(occlusion_masks, f)
 
 
 def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
