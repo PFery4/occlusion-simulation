@@ -79,34 +79,54 @@ def reformat_occluder_columns(overwrite: bool = False):
                 pickle.dump(occlusion_table, f)
 
 
-if __name__ == '__main__':
+def create_obs_masks():
     config = sdd_extract.get_config("config")
 
     dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
-
     print(f"{len(dataset)=}")
     print(f"{dataset.frames.head()=}")
     print(f"{dataset.lookuptable.head()=}")
     print(f"{dataset.occlusion_table.head()=}")
-    # print(f"{dataset.__dict__=}")
-    print(f"{dataset.__getitem__(0)}")
-    instance_dict = dataset.__getitem__(0)
 
-    bf = time.time()
-    visibility.compute_visibility_polygon(
-        ego_point=instance_dict['ego_point'],
-        occluders=instance_dict['occluders'],
-        boundary=poly_gen.default_rectangle(tuple(instance_dict['scene_image'].shape[:2]))
-    )
-    af = time.time()
-    print(f"{bf - af=}")
+    pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config["dataset"]["pickle_path"], dataset.pickle_id))
+    print(f"{pickle_path=}")
+    print(f"{os.path.exists(pickle_path)=}")
+    sim_folders = [path for path in os.scandir(pickle_path) if path.is_dir()]
 
-    bf2 = time.time()
-    quick_occl_poly(
-        ego_point=instance_dict['ego_point'],
-        occluder=instance_dict['occluders'][0],
-        dist=1000
-    )
-    af2 = time.time()
-    print(f"{bf2 - af2=}")
+    simulation_id = dataset.__getitem__(0)["sim_id"]
+
+    occlusion_masks = []
+
+    for idx in tqdm(range(len(dataset))):
+        instance_dict = dataset.__getitem__(idx)
+
+        if instance_dict["sim_id"] != simulation_id:
+            # dump the pickle
+            occl_path = os.path.join(pickle_path, simulation_id, "simulation_occlusions.pickle")
+            print(f"Saving occlusion masks to:\n{occl_path}")
+            with open(occl_path, "wb") as f:
+                pickle.dump(occlusion_masks, f)
+
+            # empty the list
+            occlusion_masks = []
+
+        ego_visipoly = visibility.compute_visibility_polygon(
+            ego_point=instance_dict["ego_point"],
+            occluders=instance_dict["occluders"],
+            boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
+        )
+        occlusion_masks.append(visibility.occlusion_masks(agents=instance_dict["agents"],
+                                                          time_window=instance_dict["full_window"],
+                                                          ego_visipoly=ego_visipoly))
+        simulation_id = instance_dict["sim_id"]
+
+    # dump the pickle
+    occl_path = os.path.join(pickle_path, simulation_id, "simulation_occlusions.pickle")
+    print(f"Saving occlusion masks to:\n{occl_path}")
+    with open(occl_path, "wb") as f:
+        pickle.dump(occlusion_masks, f)
+
+
+if __name__ == '__main__':
+    create_obs_masks()
 
