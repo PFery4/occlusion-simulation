@@ -284,17 +284,19 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
 
-        ego_visipoly = visibility.compute_visibility_polygon(
-            ego_point=instance_dict["ego_point"],
-            occluders=instance_dict["occluders"],
-            boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
-        )
+        # ego_visipoly = visibility.compute_visibility_polygon(
+        #     ego_point=instance_dict["ego_point"],
+        #     occluders=instance_dict["occluders"],
+        #     boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
+        # )
+        #
+        # instance_dict["full_window_occlusion_masks"] = visibility.occlusion_masks(
+        #     agents=instance_dict["agents"],
+        #     time_window=instance_dict["full_window"],
+        #     ego_visipoly=ego_visipoly
+        # )
+        # Maybe load occlusion masks here
 
-        instance_dict["full_window_occlusion_masks"] = visibility.occlusion_masks(
-            agents=instance_dict["agents"],
-            time_window=instance_dict["full_window"],
-            ego_visipoly=ego_visipoly
-        )
         return instance_dict
 
     def find_occl_idx(self, sim_id: str, scene: str, video: str, timestep: int, trial: int) -> int:
