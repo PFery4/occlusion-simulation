@@ -340,13 +340,6 @@ if __name__ == '__main__':
         print(f"getitem({idx}) took {time.time() - before} s")
 
         ax.title.set_text(idx)
-        sdd_visualize.draw_map_numpy(
-            draw_ax=ax, scene_image=instance_dict["scene_image"]
-        )
-        if "ego_point" in instance_dict.keys():
-            sdd_visualize.visualize_occlusion_map(
-                draw_ax=ax, instance_dict=instance_dict
-            )
         sdd_visualize.visualize_training_instance(
             draw_ax=ax, instance_dict=instance_dict
         )
