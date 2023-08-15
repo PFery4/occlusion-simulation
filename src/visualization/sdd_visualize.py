@@ -7,11 +7,14 @@ import pandas as pd
 import torch
 import skgeom as sg
 
+from typing import List, Tuple
+
 import src.data.sdd_extract as sdd_extract
 import src.data.sdd_data_processing as sdd_data_processing
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.occlusion_simulation.visibility as visibility
 from src.visualization.plot_utils import plot_sg_polygon
+from src.data.sdd_agent import StanfordDroneAgent
 
 SDD_CLASS_SYMBOLS = {'Pedestrian': 'P',     # pedestrian
                      'Biker': 'C',          # cyclist
@@ -98,6 +101,49 @@ def draw_map_numpy(draw_ax: matplotlib.axes.Axes, scene_image: np.array) -> None
     draw_ax.imshow(scene_image)
 
 
+def draw_occlusion_map(
+        draw_ax: matplotlib.axes.Axes,
+        scene_boundary: sg.Polygon,
+        ego_visipoly: sg.Polygon
+) -> None:
+    occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
+    [plot_sg_polygon(ax=draw_ax, poly=poly, edgecolor="red", facecolor="red", alpha=0.2)
+     for poly in occluded_regions.polygons]
+
+
+def draw_occlusion_states(
+        draw_ax: matplotlib.axes.Axes,
+        agent_trajectories: np.array,
+        occlusion_masks: np.array
+) -> None:
+    # agent_trajectories.shape = [N, T, 2], dtype = float
+    # occlusion_masks.shape = [N, T], dtype = bool
+    occluded = agent_trajectories[~occlusion_masks]     # [Occluded, 2]
+    draw_ax.scatter(occluded[:, 0], occluded[:, 1],
+                    s=50, marker="x", color="black", alpha=0.9)
+
+
+def draw_agent_trajectories(
+        draw_ax: matplotlib.axes.Axes,
+        agents: List[StanfordDroneAgent],
+        past_window: np.array, future_window: np.array
+) -> None:
+    color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(agents))))
+    for agent in agents:
+        c = next(color_iter).reshape(1, -1)
+        past = agent.get_traj_section(time_window=past_window)
+        future = agent.get_traj_section(
+            time_window=np.array([past_window[-1]] + list(future_window))
+        )
+
+        draw_ax.plot(past[:, 0], past[:, 1], color=c)
+        draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", color=c)
+        draw_ax.scatter(past[-1, 0], past[-1, 1],
+                        s=40, marker="x", color=c, label=f"${SDD_CLASS_SYMBOLS[agent.label]}^{{{agent.id}}}$")
+        draw_ax.plot(future[:, 0], future[:, 1], color=c, linestyle="dashed", alpha=0.8)
+        draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", color=c, alpha=0.8)
+
+
 def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: dict, lgnd: bool = True) -> None:
     """
     This function draws the trajectory segments of agents contained within one single training instance extracted from
@@ -110,62 +156,59 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         - 'future_window': a numpy array of type 'int', indicating the timesteps corresponding to the prediction horizon
         - 'scene_image': a numpy array containing the reference image data
     """
-    # TODO: maybe add a check to draw partially observed trajectories in gray
+    assert all(key in instance_dict.keys() for key in ["agents", "past_window", "future_window", "full_window"])
 
-    color_iter = iter(plt.cm.rainbow(np.linspace(0, 1, len(instance_dict["agents"]))))
-    full_masks = instance_dict.get(
-        "full_window_occlusion_masks",
-        [np.ones(
-            len(instance_dict["past_window"]) + len(instance_dict["future_window"])
-        ).astype(bool)] * len(instance_dict["agents"])
+    if "scene_image" in instance_dict.keys():
+        draw_map_numpy(draw_ax=draw_ax, scene_image=instance_dict["scene_image"])
+
+    if "ego_point" in instance_dict.keys():
+        draw_ax.scatter(instance_dict["ego_point"][0], instance_dict["ego_point"][1],
+                        s=20, marker="D", color="yellow", alpha=0.9, label="Ego")
+
+    if "occluders" in instance_dict.keys():
+        for occluder in instance_dict["occluders"]:
+            draw_ax.plot([occluder[0][0], occluder[1][0]], [occluder[0][1], occluder[1][1]],
+                         color="black")
+
+    if all(key in instance_dict.keys() for key in ["scene_image", "ego_point", "occluders"]):
+        # compute visibility polygon
+        scene_boundary = poly_gen.default_rectangle(
+            (float(instance_dict["scene_image"].shape[0]),
+             float(instance_dict["scene_image"].shape[1]))
+        )
+
+        ego_visipoly = visibility.compute_visibility_polygon(
+            ego_point=instance_dict["ego_point"],
+            occluders=instance_dict["occluders"],
+            boundary=scene_boundary
+        )
+
+        draw_occlusion_map(draw_ax=draw_ax, scene_boundary=scene_boundary, ego_visipoly=ego_visipoly)
+
+        # compute occlusion masks
+        full_window_occlusion_masks = visibility.occlusion_masks(
+            agents=instance_dict["agents"],
+            time_window=instance_dict["full_window"],
+            ego_visipoly=ego_visipoly
+        )
+        draw_occlusion_states(
+            draw_ax=draw_ax,
+            agent_trajectories=np.stack(
+                [agent.get_traj_section(instance_dict["full_window"])
+                 for agent in instance_dict["agents"]]
+            ),
+            occlusion_masks=full_window_occlusion_masks
+        )
+
+    draw_agent_trajectories(
+        draw_ax=draw_ax,
+        agents=instance_dict["agents"],
+        past_window=instance_dict["past_window"],
+        future_window=instance_dict["future_window"]
     )
-    for agent, full_mask in zip(instance_dict["agents"], full_masks):
-        c = next(color_iter).reshape(1, -1)
-        past = agent.get_traj_section(time_window=instance_dict["past_window"])
-        future = agent.get_traj_section(
-            time_window=np.array([instance_dict["past_window"][-1]] + list(instance_dict["future_window"]))
-        )
-        full = agent.get_traj_section(
-            time_window=instance_dict["full_window"]
-        )
-        occluded = full[~full_mask]
-        draw_ax.scatter(occluded[:, 0], occluded[:, 1],
-                        s=50, marker="x", color="black", alpha=0.9)
-
-        draw_ax.plot(past[:, 0], past[:, 1], color=c)
-        draw_ax.scatter(past[:-1, 0], past[:-1, 1], s=20, marker="x", color=c)
-        draw_ax.scatter(past[-1, 0], past[-1, 1],
-                        s=40, marker="x", color=c, label=f"${SDD_CLASS_SYMBOLS[agent.label]}^{{{agent.id}}}$")
-        draw_ax.plot(future[:, 0], future[:, 1], color=c, linestyle="dashed", alpha=0.8)
-        draw_ax.scatter(future[1:, 0], future[1:, 1], s=20, marker="x", color=c, alpha=0.8)
 
     if lgnd:
         draw_ax.legend(fancybox=True, framealpha=0.2, fontsize=10)
-
-
-def visualize_occlusion_map(draw_ax: matplotlib.axes.Axes, instance_dict: dict) -> None:
-    draw_ax.scatter(instance_dict["ego_point"][0], instance_dict["ego_point"][1],
-                    s=20, marker="D", color="yellow", alpha=0.9, label="Ego")
-
-    for occluder in instance_dict["occluders"]:
-        draw_ax.plot([occluder[0][0], occluder[1][0]],
-                     [occluder[0][1], occluder[1][1]],
-                     color="black")
-
-    scene_boundary = poly_gen.default_rectangle(
-        (float(instance_dict["scene_image"].shape[0]),
-         float(instance_dict["scene_image"].shape[1]))
-    )
-
-    ego_visipoly = visibility.compute_visibility_polygon(
-        ego_point=instance_dict["ego_point"],
-        occluders=instance_dict["occluders"],
-        boundary=scene_boundary
-    )
-
-    occluded_regions = sg.PolygonSet(scene_boundary).difference(ego_visipoly)
-    [plot_sg_polygon(ax=draw_ax, poly=poly, edgecolor="red", facecolor="red", alpha=0.2)
-     for poly in occluded_regions.polygons]
 
 
 def visualize_full_trajectories_on_all_scenes():
