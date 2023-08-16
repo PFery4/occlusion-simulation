@@ -387,7 +387,7 @@ def runsim_on_entire_dataset() -> None:
                     "occlusion_windows": simdict["occlusion_windows"]
                 }
 
-                occlusion_masks.append(visibility.occlusion_masks(
+                occlusion_masks.append(visibility.agent_occlusion_masks(
                     agents=agents,
                     time_window=instance_dict["full_window"],
                     ego_visipoly=simdict["ego_visipoly"]

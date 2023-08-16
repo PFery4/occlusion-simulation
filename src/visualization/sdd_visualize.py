@@ -186,7 +186,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         draw_occlusion_map(draw_ax=draw_ax, scene_boundary=scene_boundary, ego_visipoly=ego_visipoly)
 
         # compute occlusion masks
-        full_window_occlusion_masks = visibility.occlusion_masks(
+        full_window_occlusion_masks = visibility.agent_occlusion_masks(
             agents=instance_dict["agents"],
             time_window=instance_dict["full_window"],
             ego_visipoly=ego_visipoly
