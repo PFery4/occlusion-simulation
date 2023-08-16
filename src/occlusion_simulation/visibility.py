@@ -27,18 +27,23 @@ def compute_visibility_polygon(
     return visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
 
 
-def occlusion_masks(
+def agent_occlusion_masks(
         agents: List[StanfordDroneAgent],
         time_window: np.array,
         ego_visipoly: sg.Polygon,
 ) -> np.array:
-
     agent_masks = []
     for agent in agents:
-        agent_mask = np.array([
-            ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
-            for point in agent.get_traj_section(time_window)
-        ])
-        agent_masks.append(agent_mask)
-
+        agent_masks.append(occlusion_mask(points=agent.get_traj_section(time_window), ego_visipoly=ego_visipoly))
     return np.stack(agent_masks)        # [N, T]
+
+
+def occlusion_mask(
+        points: np.array,
+        ego_visipoly: sg.Polygon
+) -> np.array:
+    # points.shape = [N, 2]
+    return np.array([
+        ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
+        for point in points
+    ])
