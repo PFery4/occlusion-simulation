@@ -22,10 +22,9 @@ def simulate_occlusions(
         past_window: np.array,
         future_window: np.array
 ):
-    n_targets = config["n_target_agents"]
-
     min_obs = config["min_obs"]
     min_reobs = config["min_reobs"]
+    min_occl = config["min_occl"]
 
     d_border = config["d_border"]
     d_min_occl_ag = config["d_min_occl_ag"]
@@ -62,7 +61,8 @@ def simulate_occlusions(
     # the extra timestep is used to help define the disocclusion point of the target agent, which might happen one
     # timestep after the full prediction horizon (ie, the target agent makes a reappearance from occlusion only
     # after T_pred timesteps).
-    full_window = np.concatenate((past_window, future_window, [2 * future_window[-1] - future_window[-2]]))
+    future_window_plus_one = np.concatenate((future_window, [2 * future_window[-1] - future_window[-2]]))
+    full_window = np.concatenate((past_window, future_window_plus_one))
 
     # set safety perimeter around the edges of the scene
     d_border_px = int((d_border/100 * np.linalg.norm(image_res)) // 10 * 11)
@@ -171,8 +171,8 @@ def simulate_occlusions(
     occlusion_windows = [agent_op.generate_occlusion_timesteps(
         agent=agents[idx],
         past_window=past_window,
-        future_window=np.concatenate([future_window, [2 * future_window[-1] - future_window[-2]]]),
-        min_obs=min_obs, min_reobs=min_reobs
+        future_window=future_window_plus_one,
+        min_obs=min_obs, min_reobs=min_reobs, min_occl=min_occl
     ) for idx in target_agent_indices]
     simulation_dict["occlusion_windows"] = occlusion_windows
 

@@ -38,6 +38,7 @@ def target_agent_candidate_indices(
     probabilities. target agents must be:
     - in movement
     - fully observed over the entire full_window
+    the sampling probabilities are proportional to the total distance travelled by each agent in their past.
     """
 
     # checking that the target agents are fully observed over the entire window
@@ -50,9 +51,6 @@ def target_agent_candidate_indices(
                           [agent.get_traj_section(past_window) for agent in agent_list]])
     moving = (distances > 1e-8)
     candidates = np.logical_and(fully_observed, moving)
-
-    # todo: add check that all subsequent positions are different
-
     return np.asarray(candidates).nonzero()[0], distances[candidates]/sum(distances[candidates])
 
 
@@ -93,13 +91,13 @@ def target_agent_no_ego_wedges(boundary: sg.Polygon, traj: np.array, offset: flo
 
 def generate_occlusion_timesteps(
         agent: StanfordDroneAgent, past_window: np.array, future_window: np.array,
-        min_obs: int, min_reobs: int, tol: float = 1e-8
+        min_obs: int, min_reobs: int, min_occl:int, tol: float = 1e-8
 ) -> Tuple[int, int]:
 
     full_window = np.concatenate([past_window, future_window])
     full_traj = agent.get_traj_section(full_window)
-    displacements = np.linalg.norm(full_traj[1:] - full_traj[:-1], axis=1)
-    moving = (displacements >= tol)
+    moving = (np.linalg.norm(full_traj[1:] - full_traj[:-1], axis=1) >= tol)
+
     past_mask = np.in1d(full_window, past_window)
     past_mask[:min_obs-1] = False
     past_occl_indices = np.nonzero(np.logical_and(past_mask[:past_window.shape[0]], moving[:past_window.shape[0]]))[0]
@@ -108,16 +106,12 @@ def generate_occlusion_timesteps(
     future_mask = np.in1d(full_window, future_window)
     if min_reobs != 0:
         future_mask[-min_reobs:] = False
+    future_mask[t_occl+1:t_occl+1+min_occl] = False
     future_occl_indices = np.nonzero(np.logical_and(
         future_mask[-future_window.shape[0]:], moving[-future_window.shape[0]:]
     ))[0]
 
     t_disoccl = int(np.random.choice(future_occl_indices) + past_window.shape[0])
-
-    # for agent in range(n_agents):
-    #     t_occl = np.random.randint(min_obs - 1, T_obs - 1)
-    #     t_disoccl = np.random.randint(T_pred - min_reobs + 1) + T_obs
-    #     occlusion_windows.append((t_occl, t_disoccl))
     return t_occl, t_disoccl
 
 
