@@ -453,44 +453,5 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
     print(f"default rectangle: {time() - before}")
 
 
-def show_simulation():
-    import src.visualization.simulation_visualize as sim_visualize
-    import src.visualization.sdd_visualize as sdd_visualize
-
-    config = sdd_extract.get_config("config")
-    dataset = StanfordDroneDataset(config_dict=config)
-
-    # showing the simulation process of some desired instance
-    instance_idx = 7592     # coupa video0 60
-    # instance_idx = 36371    # nexus video7 3024
-    # instance_idx = np.random.randint(len(dataset))
-    print(f"dataset.__getitem__({instance_idx})")
-    instance_dict = dataset.__getitem__(instance_idx)
-
-    fig, ax = plt.subplots()
-    sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"])
-    sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
-
-    # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
-    sim_params = config["occlusion_simulator"]
-    img = instance_dict["scene_image"]
-    agents = instance_dict["agents"]
-    past_window = instance_dict["past_window"]
-    future_window = instance_dict["future_window"]
-
-    simulation_outputs = simulate_occlusions(
-        config=sim_params,
-        image_res=tuple(img.shape[:2]),
-        agents=agents,
-        past_window=past_window,
-        future_window=future_window
-    )
-    sim_visualize.visualize_occlusion_simulation(instance_dict, simulation_outputs)
-
-    # Showing the simulation outputs of some random instances
-    sim_visualize.visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
-
-
 if __name__ == '__main__':
-    show_simulation()
-    # runsim_on_entire_dataset()
+    runsim_on_entire_dataset()
