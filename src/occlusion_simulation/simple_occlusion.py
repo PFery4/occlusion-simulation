@@ -10,7 +10,7 @@ import src.occlusion_simulation.type_conversion as type_conv
 import src.occlusion_simulation.polygon_operation as poly_op
 import src.occlusion_simulation.agent_operation as agent_op
 import src.occlusion_simulation.visibility as visibility
-import src.data.sdd_extract as sdd_extract
+import src.data.config as conf
 from src.data.sdd_dataloader import StanfordDroneDataset
 from src.data.sdd_agent import StanfordDroneAgent
 
@@ -310,7 +310,7 @@ def runsim_on_entire_dataset() -> None:
     import logging
     from tqdm import tqdm
 
-    config = sdd_extract.get_config("config")
+    config = conf.get_config("config")
 
     # setting the random seed (for reproducibility)
     np.random.seed(config["occlusion_simulator"]["rng_seed"])
@@ -318,7 +318,7 @@ def runsim_on_entire_dataset() -> None:
     dataset = StanfordDroneDataset(config_dict=config)
 
     # preparing the directory for saving simulation outputs
-    pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config["dataset"]["pickle_path"]))
+    pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config["dataset"]["pickle_path"]))
     sim_folder = os.path.join(pickle_path, dataset.pickle_id, str(uuid.uuid4()))
     print(f"Creating simulation directory:\n{sim_folder}")
     os.makedirs(sim_folder)

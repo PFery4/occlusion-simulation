@@ -10,7 +10,7 @@ import json
 import uuid
 from typing import List, Tuple
 from src.data.sdd_agent import StanfordDroneAgent
-import src.data.sdd_extract as sdd_extract
+import src.data.config as conf
 import src.data.sdd_data_processing as sdd_data_processing
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.occlusion_simulation.agent_operation as agent_op
@@ -32,7 +32,7 @@ class StanfordDroneDataset(Dataset):
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
         self.pickle_id = self.find_pickle_id(pickle_path)
 
         if self.pickle_id:
@@ -237,7 +237,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
     def __init__(self, config_dict):
         super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
 
-        pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
         sim_root_dir = os.path.join(pickle_path, self.pickle_id)
 
         assert os.path.exists(sim_root_dir)
@@ -310,7 +310,7 @@ if __name__ == '__main__':
     import time
     import src.visualization.sdd_visualize as sdd_visualize
 
-    config = sdd_extract.get_config("config")
+    config = conf.get_config("config")
 
     # dataset = StanfordDroneDataset(config_dict=config)
     dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)

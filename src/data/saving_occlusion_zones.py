@@ -7,7 +7,7 @@ import numpy as np
 import skgeom as sg
 from tqdm import tqdm
 from typing import List, Tuple
-import src.data.sdd_extract as sdd_extract
+import src.data.config as conf
 import src.occlusion_simulation.visibility as visibility
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.visualization.plot_utils as plot_utils
@@ -55,8 +55,8 @@ def quick_occl_poly(ego_point: Tuple[float, float],
 
 
 def reformat_occluder_columns(overwrite: bool = False):
-    config = sdd_extract.get_config("config")
-    pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config["dataset"]["pickle_path"], "ce4ae1bc-5369-464c-9556-3b33a0178f98"))
+    config = conf.get_config("config")
+    pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config["dataset"]["pickle_path"], "ce4ae1bc-5369-464c-9556-3b33a0178f98"))
 
     print(f"{pickle_path=}")
     print(f"{os.path.exists(pickle_path)=}")
@@ -80,7 +80,7 @@ def reformat_occluder_columns(overwrite: bool = False):
 
 
 def create_obs_masks():
-    config = sdd_extract.get_config("config")
+    config = conf.get_config("config")
 
     dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     print(f"{len(dataset)=}")
@@ -88,7 +88,7 @@ def create_obs_masks():
     print(f"{dataset.lookuptable.head()=}")
     print(f"{dataset.occlusion_table.head()=}")
 
-    pickle_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config["dataset"]["pickle_path"], dataset.pickle_id))
+    pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config["dataset"]["pickle_path"], dataset.pickle_id))
     print(f"{pickle_path=}")
     print(f"{os.path.exists(pickle_path)=}")
     sim_folders = [path for path in os.scandir(pickle_path) if path.is_dir()]

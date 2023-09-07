@@ -279,10 +279,10 @@ def visualize_random_simulation_samples(
 
 
 def show_simulation():
-    import src.data.sdd_extract as sdd_extract
+    import src.data.config as conf
     import src.visualization.sdd_visualize as sdd_visualize
 
-    config = sdd_extract.get_config("config")
+    config = conf.get_config("config")
     dataset = StanfordDroneDataset(config_dict=config)
 
     # showing the simulation process of some desired instance

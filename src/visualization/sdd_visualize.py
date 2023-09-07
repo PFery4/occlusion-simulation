@@ -9,7 +9,7 @@ import skgeom as sg
 
 from typing import List, Tuple
 
-import src.data.sdd_extract as sdd_extract
+import src.data.config as conf
 import src.data.sdd_data_processing as sdd_data_processing
 import src.occlusion_simulation.polygon_generation as poly_gen
 import src.occlusion_simulation.visibility as visibility
@@ -212,13 +212,13 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
 
 
 def visualize_full_trajectories_on_all_scenes():
-    config_dict = sdd_extract.get_config("config")
+    config_dict = conf.get_config("config")
     data_path = config_dict["dataset"]["path"]
     print(f"Extracting data from:\n{data_path}\n")
 
     show = True
     save = False
-    save_path = os.path.abspath(os.path.join(sdd_extract.REPO_ROOT, config_dict["results"]["fig_path"]))
+    save_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["results"]["fig_path"]))
     assert os.path.exists(save_path)
 
     for scene_name in os.scandir(os.path.join(data_path, "annotations")):
@@ -278,7 +278,7 @@ def visualize_full_trajectories_on_all_scenes():
 
 
 def get_video_resolutions():
-    config = sdd_extract.get_config("config")
+    config = conf.get_config("config")
     data_dir = os.path.join(config["dataset"]["path"], "annotations")
     print(data_dir)
     assert os.path.exists(data_dir)
