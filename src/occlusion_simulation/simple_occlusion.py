@@ -325,7 +325,7 @@ def runsim_on_entire_dataset() -> None:
     assert os.path.exists(sim_folder)
 
     pkl_path = os.path.join(sim_folder, "simulation.pickle")
-    json_path = os.path.join(sim_folder, "simulation.json")
+    json_path = os.path.join(sim_folder, "simulation_parameters.json")
     log_path = os.path.join(sim_folder, "simulation.log")
     occl_path = os.path.join(sim_folder, "simulation_occlusions.pickle")
 
