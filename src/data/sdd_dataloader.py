@@ -240,7 +240,7 @@ class StanfordDroneDataset(Dataset):
         :return: None
         """
         # create dataset directory
-        assert os.path.exists(self.dataset_path), f"ERROR: dataset path already exists:\n{self.dataset_path}"
+        assert not os.path.exists(self.dataset_path), f"ERROR: dataset path already exists:\n{self.dataset_path}"
         os.mkdir(self.dataset_path)
 
         # save lookuptable and frames to a pickle
@@ -267,31 +267,26 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
     def __init__(self, config_dict):
         super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
 
-        pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
-        sim_root_dir = os.path.join(pickle_path, self.pickle_id)
+        assert os.path.exists(self.dataset_path), f"ERROR: Path does not exist: {self.dataset_path}"
+        print(f"Extracting simulation pickle files from:\n{self.dataset_path}")
 
-        assert os.path.exists(sim_root_dir)
-        print(f"Simulation pickle files are stored under:\n{sim_root_dir}")
-
-        sim_folders = [path for path in os.scandir(sim_root_dir) if path.is_dir()]
-
+        sim_ids = config_dict["occlusion_dataset"]["sim_ids"]
         occlusion_tables = []
-        sim_ids = []
 
-        for folder in sim_folders:
-            sim_pkl_path = os.path.join(folder, "simulation.pickle")
-            sim_json_path = os.path.join(folder, "simulation.json")
-
+        for sim_id in sim_ids:
+            sim_folder = os.path.join(self.dataset_path, sim_id)
+            assert os.path.exists(sim_folder), f"ERROR: simulation folder does not exist:\n{sim_folder}"
+            sim_pkl_path = os.path.join(sim_folder, "simulation.pickle")
+            sim_json_path = os.path.join(sim_folder, "simulation_parameters.json")
             assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path), \
-                "Simulation pickle and json files not found, " \
-                "please run the occlusion simulation and verify that the corresponding files have been saved"
+                "Simulation pickle and/or json files not found, " \
+                "please run the occlusion simulation and verify that the corresponding files have been saved:\n" \
+                f"{sim_pkl_path}\n" \
+                f"{sim_json_path}"
             print(f"extracting data form: {sim_pkl_path}")
 
             occlusion_tables.append(self.load_data(sim_pkl_path))
-            sim_ids.append(os.path.basename(folder))
-
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
-        # print(self.occlusion_table.head())
 
     def __len__(self) -> int:
         return len(self.occlusion_table)
@@ -341,8 +336,8 @@ if __name__ == '__main__':
 
     config = conf.get_config("config")
 
-    dataset = StanfordDroneDataset(config_dict=config)
-    # dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    # dataset = StanfordDroneDataset(config_dict=config)
+    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     print(f"{len(dataset)=}")
 
     print(f"{dataset.__class__}.__getitem__() dictionary keys:")
