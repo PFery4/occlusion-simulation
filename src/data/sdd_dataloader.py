@@ -31,11 +31,11 @@ class StanfordDroneDataset(Dataset):
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
         if self.pickle_id:
-            dataset_path = os.path.join(datasets_path, self.pickle_id)
-            assert os.path.exists(dataset_path), f"ERROR: pickle_id does not exist:\n{self.pickle_id}"
-            print(f"Loading dataloader from:\n{dataset_path}")
-            json_path = os.path.join(dataset_path, "dataset_parameters.json")
-            pickle_path = os.path.join(dataset_path, "dataset.pickle")
+            self.dataset_path = os.path.join(datasets_path, self.pickle_id)
+            assert os.path.exists(self.dataset_path), f"ERROR: pickle_id does not exist:\n{self.pickle_id}"
+            print(f"Loading dataloader from:\n{self.dataset_path}")
+            json_path = os.path.join(self.dataset_path, "dataset_parameters.json")
+            pickle_path = os.path.join(self.dataset_path, "dataset.pickle")
             assert os.path.exists(json_path)
             assert os.path.exists(pickle_path)
 
@@ -137,7 +137,8 @@ class StanfordDroneDataset(Dataset):
 
             # generate unique file name for our saved pickle and json files
             self.pickle_id = str(uuid.uuid4())
-            self.save_data(datasets_path, self.pickle_id)
+            self.dataset_path = os.path.join(datasets_path, self.pickle_id)
+            self.save_data()
 
     def __len__(self) -> int:
         return len(self.lookuptable)
@@ -233,21 +234,21 @@ class StanfordDroneDataset(Dataset):
                     return f"{os.path.splitext(os.path.basename(jsonfile))[0]}"
         return None
 
-    def save_data(self, path: str, save_name: str):
+    def save_data(self):
         """
         saves 'self.frames' and 'self.lookuptable' into a pickle file, and the corresponding parameters as a json
         :return: None
         """
         # create dataset directory
-        dataset_path = os.path.join(path, save_name)
-        os.mkdir(dataset_path)
+        assert os.path.exists(self.dataset_path), f"ERROR: dataset path already exists:\n{self.dataset_path}"
+        os.mkdir(self.dataset_path)
 
         # save lookuptable and frames to a pickle
-        with open(os.path.join(dataset_path, f"dataset.pickle"), "wb") as f:
+        with open(os.path.join(self.dataset_path, f"dataset.pickle"), "wb") as f:
             pickle.dump((self.frames, self.lookuptable), f)
 
         # save metadata as a json with same file name as pickle file
-        with open(os.path.join(dataset_path, f"dataset_parameters.json"), "w", encoding="utf8") as f:
+        with open(os.path.join(self.dataset_path, f"dataset_parameters.json"), "w", encoding="utf8") as f:
             json.dump(self.metadata_dict(), f, indent=4)
 
     @staticmethod
