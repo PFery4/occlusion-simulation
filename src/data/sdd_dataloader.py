@@ -57,7 +57,7 @@ class StanfordDroneDataset(Dataset):
                     annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
                     print(f"Processing: {annot_file_path}")
                     assert os.path.exists(annot_file_path)
-                    annot_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
+                    annot_df = sdd_data_processing.pd_df_from(annotation_filepath=annot_file_path)
 
                     # perform preprocessing steps
                     if self.other_agents == "OUT":

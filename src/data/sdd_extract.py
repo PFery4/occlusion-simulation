@@ -1,9 +1,7 @@
 import os
-import pandas as pd
 import yaml
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
-SDD_COL_NAMES = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
 
 
 def get_config(config_filename) -> dict:
@@ -25,15 +23,6 @@ def get_config(config_filename) -> dict:
     # perform input verifications
     assert config["hyperparameters"]["other_agents"] in ("IN", "OUT")
     return config
-
-
-def pd_df_from(annotation_filepath):
-    """
-    takes the path of an annotation.txt file of the SDD, and produces its corresponding pandas dataframe
-    :param annotation_filepath: the path of the annotation file
-    :return: a pandas dataframe
-    """
-    return pd.read_csv(annotation_filepath, sep=" ", names=SDD_COL_NAMES)
 
 
 if __name__ == '__main__':

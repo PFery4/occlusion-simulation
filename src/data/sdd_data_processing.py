@@ -1,6 +1,16 @@
 import numpy as np
 import pandas as pd
-from typing import List
+
+SDD_COL_NAMES = ["Id", "xmin", "ymin", "xmax", "ymax", "frame", "lost", "occl.", "gen.", "label"]
+
+
+def pd_df_from(annotation_filepath):
+    """
+    takes the path of an annotation.txt file of the SDD, and produces its corresponding pandas dataframe
+    :param annotation_filepath: the path of the annotation file
+    :return: a pandas dataframe
+    """
+    return pd.read_csv(annotation_filepath, sep=" ", names=SDD_COL_NAMES)
 
 
 def bool_columns_in(annot_df: pd.DataFrame):

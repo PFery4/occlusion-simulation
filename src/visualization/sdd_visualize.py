@@ -227,7 +227,7 @@ def visualize_full_trajectories_on_all_scenes():
             annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
             ref_image_path = os.path.join(os.path.realpath(video_name), "reference.jpg")
 
-            annot_file_df = sdd_extract.pd_df_from(annotation_filepath=annot_file_path)
+            annot_file_df = sdd_data_processing.pd_df_from(annotation_filepath=annot_file_path)
 
             # n_timesteps = count_timesteps(annot_file_df)
             # duration = timesteps_to_seconds(n_timesteps)
