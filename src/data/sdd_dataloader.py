@@ -16,27 +16,53 @@ class StanfordDroneDataset(Dataset):
 
     def __init__(self, config_dict):
         self.root = config_dict["dataset"]["path"]
-        self.orig_fps = config_dict["dataset"]["fps"]
-        self.fps = config_dict["hyperparameters"]["fps"]
-        self.T_obs = config_dict["hyperparameters"]["T_obs"]
-        self.T_pred = config_dict["hyperparameters"]["T_pred"]
-        self.min_n = config_dict["hyperparameters"]["min_N_agents"]
-        self.agent_classes = config_dict["hyperparameters"]["agent_types"]
-        self.other_agents = config_dict["hyperparameters"]["other_agents"]
+        datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        self.pickle_id = config_dict["dataset"].get("pickle_id", None)
+
+        self.orig_fps = None
+        self.fps = None
+        self.T_obs = None
+        self.T_pred = None
+        self.min_n = None
+        self.agent_classes = None
+        self.other_agents = None
 
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
-        self.pickle_id = self.find_pickle_id(pickle_path)
-
         if self.pickle_id:
-            found_path = os.path.join(pickle_path, f"{self.pickle_id}.pickle")
-            assert os.path.exists(found_path)
-            print(f"Loading dataloader from:\n{found_path}")
-            self.frames, self.lookuptable = self.load_data(found_path)
+            dataset_path = os.path.join(datasets_path, self.pickle_id)
+            assert os.path.exists(dataset_path), f"ERROR: pickle_id does not exist:\n{self.pickle_id}"
+            print(f"Loading dataloader from:\n{dataset_path}")
+            json_path = os.path.join(dataset_path, "dataset_parameters.json")
+            pickle_path = os.path.join(dataset_path, "dataset.pickle")
+            assert os.path.exists(json_path)
+            assert os.path.exists(pickle_path)
+
+            with open(json_path) as f:
+                json_dict = json.load(f)
+
+            self.orig_fps = json_dict["orig_fps"]
+            self.fps = json_dict["fps"]
+            self.T_obs = json_dict["T_obs"]
+            self.T_pred = json_dict["T_pred"]
+            self.min_n = json_dict["min_n"]
+            self.agent_classes = json_dict["agent_classes"]
+            self.other_agents = json_dict["other_agents"]
+
+            self.frames, self.lookuptable = self.load_data(pickle_path)
+
         else:
-            print("No pickle file found, loading from raw dataset and performing preprocessing")
+            print("No pickle file found/provided, loading from raw dataset and performing preprocessing")
+
+            self.orig_fps = config_dict["dataset"]["fps"]
+            self.fps = config_dict["hyperparameters"]["fps"]
+            self.T_obs = config_dict["hyperparameters"]["T_obs"]
+            self.T_pred = config_dict["hyperparameters"]["T_pred"]
+            self.min_n = config_dict["hyperparameters"]["min_N_agents"]
+            self.agent_classes = config_dict["hyperparameters"]["agent_types"]
+            self.other_agents = config_dict["hyperparameters"]["other_agents"]
+
             # the lookuptable is a dataframe separate from the dataframe containing all trajectory data.
             # each row fully describes a complete training instance,
             # with its corresponding video/scene name, and timestep.
@@ -103,7 +129,7 @@ class StanfordDroneDataset(Dataset):
                     frames.append(annot_df)
                     # scene_keys.append(scene_key)
 
-            self.lookuptable.set_index(["scene", "video", "timestep"], inplace=True)     # todo: maybe add 'timestep' in the index
+            self.lookuptable.set_index(["scene", "video", "timestep"], inplace=True)
             self.lookuptable.sort_index(inplace=True)
             self.frames = pd.concat(frames)
             self.frames.set_index(["scene", "video"], inplace=True)
@@ -111,7 +137,7 @@ class StanfordDroneDataset(Dataset):
 
             # generate unique file name for our saved pickle and json files
             self.pickle_id = str(uuid.uuid4())
-            self.save_data(pickle_path, self.pickle_id)
+            self.save_data(datasets_path, self.pickle_id)
 
     def __len__(self) -> int:
         return len(self.lookuptable)
@@ -195,6 +221,9 @@ class StanfordDroneDataset(Dataset):
         :param search_dir: the directory within which to look
         :return: the path to a valid pickle file, if it exists
         """
+        from warnings import warn
+        warn("This function is no longer used", DeprecationWarning, stacklevel=2)
+
         json_files = [os.path.join(search_dir, file) for file in os.listdir(search_dir) if file.endswith(".json")]
         json_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
 
@@ -209,12 +238,16 @@ class StanfordDroneDataset(Dataset):
         saves 'self.frames' and 'self.lookuptable' into a pickle file, and the corresponding parameters as a json
         :return: None
         """
+        # create dataset directory
+        dataset_path = os.path.join(path, save_name)
+        os.mkdir(dataset_path)
+
         # save lookuptable and frames to a pickle
-        with open(os.path.join(path, f"{save_name}.pickle"), "wb") as f:
+        with open(os.path.join(dataset_path, f"dataset.pickle"), "wb") as f:
             pickle.dump((self.frames, self.lookuptable), f)
 
         # save metadata as a json with same file name as pickle file
-        with open(os.path.join(path, f"{save_name}.json"), "w", encoding="utf8") as f:
+        with open(os.path.join(dataset_path, f"dataset_parameters.json"), "w", encoding="utf8") as f:
             json.dump(self.metadata_dict(), f, indent=4)
 
     @staticmethod
@@ -307,8 +340,8 @@ if __name__ == '__main__':
 
     config = conf.get_config("config")
 
-    # dataset = StanfordDroneDataset(config_dict=config)
-    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    dataset = StanfordDroneDataset(config_dict=config)
+    # dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
     print(f"{len(dataset)=}")
 
     print(f"{dataset.__class__}.__getitem__() dictionary keys:")
