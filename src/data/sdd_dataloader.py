@@ -2,19 +2,14 @@ import os.path
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
-import skgeom as sg
 import cv2
 import torchvision.transforms
 import pickle
 import json
 import uuid
-from typing import List, Tuple
 from src.data.sdd_agent import StanfordDroneAgent
 import src.data.config as conf
 import src.data.sdd_data_processing as sdd_data_processing
-import src.occlusion_simulation.polygon_generation as poly_gen
-import src.occlusion_simulation.agent_operation as agent_op
-import src.occlusion_simulation.visibility as visibility
 
 
 class StanfordDroneDataset(Dataset):
@@ -211,7 +206,7 @@ class StanfordDroneDataset(Dataset):
 
     def save_data(self, path: str, save_name: str):
         """
-        saves self.frames and self.lookuptable into a pickle file, and the corresponding parameters as a json
+        saves 'self.frames' and 'self.lookuptable' into a pickle file, and the corresponding parameters as a json
         :return: None
         """
         # save lookuptable and frames to a pickle
@@ -225,7 +220,8 @@ class StanfordDroneDataset(Dataset):
     @staticmethod
     def load_data(filepath: str):
         """
-        reads the pickle file with name 'filepath', and assigns corresponding values to self.frames and self.lookuptable
+        reads the pickle file with name 'filepath',
+        and assigns corresponding values to 'self.frames' and 'self.lookuptable'
         :param filepath: the path of the pickle file to read from
         :return: None
         """
@@ -248,9 +244,9 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         occlusion_tables = []
         sim_ids = []
 
-        for dir in sim_folders:
-            sim_pkl_path = os.path.join(dir, "simulation.pickle")
-            sim_json_path = os.path.join(dir, "simulation.json")
+        for folder in sim_folders:
+            sim_pkl_path = os.path.join(folder, "simulation.pickle")
+            sim_json_path = os.path.join(folder, "simulation.json")
 
             assert os.path.exists(sim_pkl_path) and os.path.exists(sim_json_path), \
                 "Simulation pickle and json files not found, " \
@@ -258,7 +254,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
             print(f"extracting data form: {sim_pkl_path}")
 
             occlusion_tables.append(self.load_data(sim_pkl_path))
-            sim_ids.append(os.path.basename(dir))
+            sim_ids.append(os.path.basename(folder))
 
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
         # print(self.occlusion_table.head())
@@ -302,7 +298,6 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
     def find_occl_idx(self, sim_id: str, scene: str, video: str, timestep: int, trial: int) -> int:
         video_slice = self.occlusion_table.index.get_loc((sim_id, scene, video, timestep, trial))
         return int(video_slice)
-
 
 
 if __name__ == '__main__':
