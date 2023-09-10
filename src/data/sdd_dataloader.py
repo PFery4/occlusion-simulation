@@ -367,9 +367,17 @@ if __name__ == '__main__':
         sdd_visualize.visualize_training_instance(
             draw_ax=ax, instance_dict=instance_dict
         )
-
-    plt.show()
     ##################################################################################################################
+
+    idx_samples = [42578, 62777, 79908, 41933, 90340, 80810]
+    for idx in idx_samples:
+        fig, ax = plt.subplots(1, 1)
+        instance_dict = dataset.__getitem__(idx)
+
+        ax.title.set_text(idx)
+        sdd_visualize.visualize_training_instance(
+            draw_ax=ax, instance_dict=instance_dict
+        )
 
     # print(dataset.frames.columns)
     #
@@ -383,3 +391,4 @@ if __name__ == '__main__':
     # [print(dataset.__getitem__(idx)["timestep"]) for idx in indices]
 
     ##################################################################################################################
+    plt.show()
