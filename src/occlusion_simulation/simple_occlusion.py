@@ -96,6 +96,7 @@ def simulate_occlusions(
         raise ValueError("No valid candidates available for occlusion simulation.")
 
     target_agent_indices = None
+    occlusion_windows = None
     no_ego_wedges = None
     targets_fullobs_regions = None
     yes_ego_triangles = []
@@ -105,14 +106,27 @@ def simulate_occlusions(
             target_agent_candidates, target_probabilities, n=1
         )
 
+        # generate occlusion windows -> List[Tuple[int, int]]
+        # each item provides two timesteps for each target agent:
+        # - the first one corresponds to the last observed timestep before occlusion
+        # - the second one corresponds to the first re-observed timestep before reappearance
+        occlusion_windows = [agent_op.generate_occlusion_timesteps(
+            agent=agents[idx],
+            past_window=past_window,
+            future_window=future_window_plus_one,
+            min_obs=min_obs, min_reobs=min_reobs, min_occl=min_occl
+        ) for idx in target_agent_indices]
+
         # define no_ego_wedges, a sg.PolygonSet, containing sg.Polygons within which we wish not to place the ego
         # the wedges are placed at the extremeties of the target agents, in order to prevent ego placements directly aligned
         # with the target agents' trajectories
         no_ego_wedges = sg.PolygonSet(list(itertools.chain(*[
             agent_op.target_agent_no_ego_wedges(
-                scene_boundary, agents[idx].get_traj_section(full_window[:-1]), d_min_ag_ego, taper_angle
+                scene_boundary, agents[idx].get_traj_section(
+                    full_window[occlusion_windows[i][0]:occlusion_windows[i][1]]
+                ), d_min_ag_ego, taper_angle
             )
-            for idx in target_agent_indices
+            for i, idx in enumerate(target_agent_indices)
         ])))
 
         # list: a given item is a sg.PolygonSet, which describes the regions in space from which
@@ -164,21 +178,22 @@ def simulate_occlusions(
         raise ValueError(f"No placement of ego possible: yes_ego_triangle->{yes_ego_triangles}")
 
     simulation_dict["target_agent_indices"] = target_agent_indices
+    simulation_dict["occlusion_windows"] = occlusion_windows
     simulation_dict["no_ego_wedges"] = no_ego_wedges
     simulation_dict["targets_fullobs_regions"] = targets_fullobs_regions
     simulation_dict["yes_ego_triangles"] = yes_ego_triangles
 
-    # generate occlusion windows -> List[Tuple[int, int]]
-    # each item provides two timesteps for each target agent:
-    # - the first one corresponds to the last observed timestep before occlusion
-    # - the second one corresponds to the first re-observed timestep before reappearance
-    occlusion_windows = [agent_op.generate_occlusion_timesteps(
-        agent=agents[idx],
-        past_window=past_window,
-        future_window=future_window_plus_one,
-        min_obs=min_obs, min_reobs=min_reobs, min_occl=min_occl
-    ) for idx in target_agent_indices]
-    simulation_dict["occlusion_windows"] = occlusion_windows
+    # # generate occlusion windows -> List[Tuple[int, int]]
+    # # each item provides two timesteps for each target agent:
+    # # - the first one corresponds to the last observed timestep before occlusion
+    # # - the second one corresponds to the first re-observed timestep before reappearance
+    # occlusion_windows = [agent_op.generate_occlusion_timesteps(
+    #     agent=agents[idx],
+    #     past_window=past_window,
+    #     future_window=future_window_plus_one,
+    #     min_obs=min_obs, min_reobs=min_reobs, min_occl=min_occl
+    # ) for idx in target_agent_indices]
+    # simulation_dict["occlusion_windows"] = occlusion_windows
 
     # to those occlusion window timesteps, we compute the corresponding occlusion coordinates for each target agent
     occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
