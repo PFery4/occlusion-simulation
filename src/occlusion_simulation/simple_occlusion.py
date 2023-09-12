@@ -22,6 +22,8 @@ def simulate_occlusions(
         past_window: np.array,
         future_window: np.array
 ):
+    min_travl_dist = config["min_travl_dist"]
+
     min_obs = config["min_obs"]
     min_reobs = config["min_reobs"]
     min_occl = config["min_occl"]
@@ -87,7 +89,9 @@ def simulate_occlusions(
 
     # BEGINNING OF CHECK FOR VALIDITY OF EGO PLACEMENT ##############################################################
     # choose agents within the scene whose trajectory we would like to occlude virtually
-    target_agent_candidates, target_probabilities = agent_op.target_agent_candidate_indices(agents, full_window, past_window)
+    target_agent_candidates, target_probabilities = agent_op.target_agent_candidate_indices(
+        agent_list=agents, full_window=full_window, past_window=past_window, min_travl_dist=min_travl_dist
+    )
     if np.size(target_agent_candidates) == 0:
         raise ValueError("No valid candidates available for occlusion simulation.")
 
