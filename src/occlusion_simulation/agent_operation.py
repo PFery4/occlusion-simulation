@@ -31,7 +31,8 @@ def interpolate_trajectory(traj: np.array, dt: float = 1.0) -> np.array:
 def target_agent_candidate_indices(
         agent_list: List[StanfordDroneAgent],
         full_window: np.array,
-        past_window: np.array
+        past_window: np.array,
+        min_travl_dist: float
 ) -> Tuple[np.array, np.array]:
     """
     returns a list of candidate agents to be the targets for occlusion simulation, with corresponding sampling
@@ -49,8 +50,17 @@ def target_agent_candidate_indices(
     # checking that the target agents are moving
     distances = np.array([np.linalg.norm(pasttraj[-1] - pasttraj[0]) for pasttraj in
                           [agent.get_traj_section(past_window) for agent in agent_list]])
-    moving = (distances > 1e-8)
-    candidates = np.logical_and(fully_observed, moving)
+    not_idle = (distances > 1e-8)
+
+    # checking that the agents meet the distance requirement: having travelled min_travl_dist over the past window
+    # (this is to help prevent the simulation of occlusions over agents who are standing still and/or barely moving)
+    travl_dists = np.array([agent.get_travelled_distance(past_window) for agent in agent_list])
+    moving = (travl_dists > min_travl_dist)
+
+    candidates = functools.reduce(
+        lambda arr_a, arr_b: np.logical_and(arr_a, arr_b),
+        (fully_observed, not_idle, moving)
+    )
     return np.asarray(candidates).nonzero()[0], distances[candidates]/sum(distances[candidates])
 
 
