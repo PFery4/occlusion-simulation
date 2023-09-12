@@ -24,3 +24,9 @@ class StanfordDroneAgent:
 
     def get_data_availability_mask(self, time_window: np.array) -> np.array:
         return np.in1d(time_window, self.timesteps).astype(float)
+
+    def get_distance_travelled(self, time_window: np.array) -> float:
+        traj_section = self.get_traj_section(time_window=time_window)
+        diffs = traj_section[1:, ...] - traj_section[:-1, ...]
+        dists = np.linalg.norm(diffs, axis=1)
+        return float(np.sum(dists))
