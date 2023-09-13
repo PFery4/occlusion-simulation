@@ -292,6 +292,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
 
+        # TODO: incorporate proper visualization, and processing by pred model, of empty occlusion cases.
         # # extracting every case for which no occlusion simulation is available
         # all_indices = [
         #     (sim_id, *index, n-1)
