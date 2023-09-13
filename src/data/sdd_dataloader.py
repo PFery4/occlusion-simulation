@@ -271,6 +271,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         print(f"Extracting simulation pickle files from:\n{self.dataset_path}")
 
         sim_ids = config_dict["occlusion_dataset"]["sim_ids"]
+        n_trials = []
         occlusion_tables = []
 
         for sim_id in sim_ids:
@@ -283,10 +284,34 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
                 "please run the occlusion simulation and verify that the corresponding files have been saved:\n" \
                 f"{sim_pkl_path}\n" \
                 f"{sim_json_path}"
-            print(f"extracting data form: {sim_pkl_path}")
-
+            print(f"extracting data form:\n{sim_pkl_path}\n{sim_json_path}")
             occlusion_tables.append(self.load_data(sim_pkl_path))
+            with open(sim_json_path, 'r') as f:
+                sim_params = json.load(f)
+            n_trials.append(sim_params["simulations_per_instance"])
+
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
+
+        # extracting every case for which no occlusion simulation is available
+        all_indices = [
+            (sim_id, *index, n-1)
+            for sim_id, n in zip(sim_ids, n_trials)
+            for index in self.lookuptable.index
+        ]
+        empty_indices = pd.Index(list(set(all_indices).difference(self.occlusion_table.index)))
+
+        self.occlusion_cases = len(self.occlusion_table)
+        self.empty_cases = len(empty_indices)
+
+        self.occlusion_table = self.occlusion_table.reindex(
+            [*self.occlusion_table.index, *empty_indices]
+        ).fillna(value=np.nan)
+        self.occlusion_table.sort_index(inplace=True)
+
+        print(f"{self.occlusion_cases=}")
+        print(f"{self.empty_cases=}")
+        print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f} % of occlusion cases")
+        assert len(self.occlusion_table) == len(self.lookuptable) * sum(n_trials)
 
     def __len__(self) -> int:
         return len(self.occlusion_table)
@@ -308,6 +333,8 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         instance_dict["occluders"] = occlusion_case["occluders"]
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
+
+        # print(f"{instance_dict.items()=}")
 
         # ego_visipoly = visibility.compute_visibility_polygon(
         #     ego_point=instance_dict["ego_point"],
