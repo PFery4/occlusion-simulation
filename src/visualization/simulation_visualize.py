@@ -353,13 +353,12 @@ def save_simulation_cases():
     err_count = 0
 
     for idx in tqdm(instance_indices):
-        print(f"{idx=}")
         gs_kw = dict(wspace=0.0, hspace=0.0)
         fig, ax = plt.subplots(gridspec_kw=gs_kw)
         instance_dict = dataset.__getitem__(idx)
 
         sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"])
-        sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
+        sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict, lgnd=False)
 
         img = instance_dict["scene_image"]
         agents = instance_dict["agents"]
@@ -395,10 +394,6 @@ def save_simulation_cases():
                 p2s=p2s,
                 occluded_regions=occluded_regions
             )
-            ax.set_title(idx)
-
-            img_path = os.path.join(save_path, f"example_{idx}.png")
-            plt.savefig(fname=img_path, format='png', bbox_inches='tight', pad_inches=0)
 
         except Exception as ex:
             err_count += 1
@@ -408,8 +403,13 @@ def save_simulation_cases():
                 fontsize=20, c="red", horizontalalignment="center", verticalalignment="center"
             )
 
+        ax.set_title(idx)
+
+        img_path = os.path.join(save_path, f"example_{idx}.png")
+        plt.savefig(fname=img_path, format='png', bbox_inches='tight', pad_inches=0)
+
     print(f"TOTAL AMOUNT OF ERRORS: {err_count} / {n_examples}")
-    
+
 
 if __name__ == '__main__':
     # show_simulation()
