@@ -161,16 +161,16 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     if "scene_image" in instance_dict.keys():
         draw_map_numpy(draw_ax=draw_ax, scene_image=instance_dict["scene_image"])
 
-    if "ego_point" in instance_dict.keys():
+    if not np.all(np.isnan(instance_dict.get('ego_point'))):
         draw_ax.scatter(instance_dict["ego_point"][0], instance_dict["ego_point"][1],
                         s=20, marker="D", color="yellow", alpha=0.9, label="Ego")
 
-    if "occluders" in instance_dict.keys():
+    if not np.all(np.isnan(instance_dict.get('occluders'))):
         for occluder in instance_dict["occluders"]:
             draw_ax.plot([occluder[0][0], occluder[1][0]], [occluder[0][1], occluder[1][1]],
                          color="black")
 
-    if all(key in instance_dict.keys() for key in ["scene_image", "ego_point", "occluders"]):
+    if all(not np.all(np.isnan(instance_dict.get(key))) for key in ["scene_image", "ego_point", "occluders"]):
         # compute visibility polygon
         scene_boundary = poly_gen.default_rectangle(
             (float(instance_dict["scene_image"].shape[0]),

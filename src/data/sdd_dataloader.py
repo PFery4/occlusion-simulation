@@ -292,27 +292,27 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
 
-        # TODO: incorporate proper visualization, and processing by pred model, of empty occlusion cases.
-        # # extracting every case for which no occlusion simulation is available
-        # all_indices = [
-        #     (sim_id, *index, n-1)
-        #     for sim_id, n in zip(sim_ids, n_trials)
-        #     for index in self.lookuptable.index
-        # ]
-        # empty_indices = pd.Index(list(set(all_indices).difference(self.occlusion_table.index)))
-        #
-        # self.occlusion_cases = len(self.occlusion_table)
-        # self.empty_cases = len(empty_indices)
-        #
-        # self.occlusion_table = self.occlusion_table.reindex(
-        #     [*self.occlusion_table.index, *empty_indices]
-        # ).fillna(value=np.nan)
-        # self.occlusion_table.sort_index(inplace=True)
-        #
-        # print(f"{self.occlusion_cases=}")
-        # print(f"{self.empty_cases=}")
-        # print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f} % of occlusion cases")
-        # assert len(self.occlusion_table) == len(self.lookuptable) * sum(n_trials)
+        # TODO: incorporate proper processing by pred model, of empty occlusion cases.
+        # extracting every case for which no occlusion simulation is available
+        all_indices = [
+            (sim_id, *index, n-1)
+            for sim_id, n in zip(sim_ids, n_trials)
+            for index in self.lookuptable.index
+        ]
+        empty_indices = pd.Index(list(set(all_indices).difference(self.occlusion_table.index)))
+
+        self.occlusion_cases = len(self.occlusion_table)
+        self.empty_cases = len(empty_indices)
+
+        self.occlusion_table = self.occlusion_table.reindex(
+            [*self.occlusion_table.index, *empty_indices]
+        ).fillna(value=np.nan)
+        self.occlusion_table.sort_index(inplace=True)
+
+        print(f"{self.occlusion_cases=}")
+        print(f"{self.empty_cases=}")
+        print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f} % of all instances have a simulated occlusion")
+        assert len(self.occlusion_table) == len(self.lookuptable) * sum(n_trials)
 
     def __len__(self) -> int:
         return len(self.occlusion_table)
