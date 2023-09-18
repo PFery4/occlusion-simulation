@@ -309,9 +309,10 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         ).fillna(value=np.nan)
         self.occlusion_table.sort_index(inplace=True)
 
-        print(f"{self.occlusion_cases=}")
-        print(f"{self.empty_cases=}")
-        print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f} % of all instances have a simulated occlusion")
+        print(f"Number of instances with an occlusion simulation: {self.occlusion_cases}")
+        print(f"Number of instances without occlusion simulation: {self.empty_cases}")
+        print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f}"
+              f"% of all instances have a simulated occlusion")
         assert len(self.occlusion_table) == len(self.lookuptable) * sum(n_trials)
 
     def __len__(self) -> int:
