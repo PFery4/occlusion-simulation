@@ -300,7 +300,7 @@ def get_video_resolutions():
 
                 print(f"{os.path.basename(file)}: {width} x {height}")
 
-                whds.append((width, height, np.sqrt(width**2 + height**2)))
+                whds.append((width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height])))
 
     whds = list(dict.fromkeys(whds))
 
