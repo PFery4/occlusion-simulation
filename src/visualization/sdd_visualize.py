@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 import skgeom as sg
 
-from typing import List, Tuple
+from typing import List
 
 import src.data.config as conf
 import src.data.sdd_data_processing as sdd_data_processing
@@ -155,6 +155,7 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
         - 'past_window': a numpy array of type 'int', indicating the timesteps corresponding to the observation window
         - 'future_window': a numpy array of type 'int', indicating the timesteps corresponding to the prediction horizon
         - 'scene_image': a numpy array containing the reference image data
+    :param lgnd: whether to display the legend or not
     """
     assert all(key in instance_dict.keys() for key in ["agents", "past_window", "future_window", "full_window"])
 
@@ -357,7 +358,7 @@ def get_video_resolutions():
         for video in os.scandir(dir):
             file = os.path.join(video, "reference.jpg")
             assert os.path.exists(file)
-            counter+=1
+            counter += 1
             with open(file, "rb") as img_file:
                 img_file.seek(163)
 
@@ -368,7 +369,9 @@ def get_video_resolutions():
 
                 print(f"{os.path.basename(file)}: {width} x {height}")
 
-                whds.append((width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height])))
+                whds.append(
+                    (width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height]))
+                )
 
     whds = list(dict.fromkeys(whds))
 
