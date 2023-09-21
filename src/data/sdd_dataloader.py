@@ -26,6 +26,7 @@ class StanfordDroneDataset(Dataset):
         self.min_n = None
         self.agent_classes = None
         self.other_agents = None
+        self.px_per_m = conf.PX_PER_M
 
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
