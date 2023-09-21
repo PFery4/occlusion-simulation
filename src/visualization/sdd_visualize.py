@@ -403,6 +403,5 @@ def main():
     # copy_reference_images_to_figures_dir()
 
 
-
 if __name__ == '__main__':
     main()
