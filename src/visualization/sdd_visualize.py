@@ -370,7 +370,8 @@ def get_video_resolutions():
                 print(f"{os.path.basename(file)}: {width} x {height}")
 
                 whds.append(
-                    (width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height]))
+                    (width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height]),
+                     width / conf.PX_PER_M, height / conf.PX_PER_M)
                 )
 
     whds = list(dict.fromkeys(whds))
@@ -401,8 +402,8 @@ def copy_reference_images_to_figures_dir():
 
 def main():
     # visualize_full_trajectories_on_all_scenes()
-    # get_video_resolutions()
-    avg_walking_speed_px()
+    get_video_resolutions()
+    # avg_walking_speed_px()
     # copy_reference_images_to_figures_dir()
 
 
