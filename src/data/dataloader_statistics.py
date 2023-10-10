@@ -36,7 +36,7 @@ def get_greatest_distance_m():
         columns=['idx', 'scene', 'video', 'timestep', 'n_agents', 'max_dist_px', 'mean_dist_px']
     )
 
-    stop_at = 4
+    stop_at = -10
     for instance_idx in tqdm(range(len(dataset))):
         # print(f"{instance_idx=}")
         # print(f"{dataset.__getitem__(instance_idx)=}")
