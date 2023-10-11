@@ -33,7 +33,10 @@ def get_greatest_distance_m():
     dataset = sdd_dataloader.StanfordDroneDataset(config_dict=config)
 
     distance_df = pd.DataFrame(
-        columns=['idx', 'scene', 'video', 'timestep', 'n_agents', 'max_dist_px', 'mean_dist_px']
+        columns=[
+            'idx', 'scene', 'video', 'timestep', 'n_agents',
+            'max_dist_inter_agent_px', 'mean_dist_inter_agent_px', 'max_dist_mean_zero_px', 'mean_dist_mean_zero_px'
+        ]
     )
 
     stop_at = -10
@@ -42,31 +45,45 @@ def get_greatest_distance_m():
         # print(f"{dataset.__getitem__(instance_idx)=}")
         instance_dict = dataset.__getitem__(instance_idx)
 
-        agent_positions = np.empty([3 * len(instance_dict['agents']), 2])
+        # agent_positions = np.empty([3 * len(instance_dict['agents']), 2])
+        ps_obs = np.empty([len(instance_dict['agents']), 2])
+        ps_zero = np.empty([len(instance_dict['agents']), 2])
+        ps_pred = np.empty([len(instance_dict['agents']), 2])
+
         for idx, agent in enumerate(instance_dict['agents']):
             p_obs = agent.position_at_timestep(instance_dict['full_window'][0])
             p_zero = agent.position_at_timestep(instance_dict['past_window'][-1])
             p_pred = agent.position_at_timestep(instance_dict['full_window'][-1])
 
-            agent_positions[3*idx, :] = p_obs
-            agent_positions[3*idx+1, :] = p_zero
-            agent_positions[3*idx+2, :] = p_pred
+            ps_obs[idx, :] = p_obs
+            ps_zero[idx, :] = p_zero
+            ps_pred[idx, :] = p_pred
 
-        # print(f"{agent_positions, len(agent_positions)=}")
-        diff_matrix = np.abs(agent_positions[:, np.newaxis] - agent_positions)
+        mean_zero = np.mean(ps_zero, axis=0)[np.newaxis, :]
+        positions = np.concatenate([ps_obs, ps_zero, ps_pred], axis=0)
+
+        # print(f"{ps_obs, ps_obs.shape=}")
+        # print(f"{ps_zero, ps_zero.shape=}")
+        # print(f"{ps_pred, ps_pred.shape=}")
+        # print(f"{mean_zero, mean_zero.shape=}")
+        # print(f"{positions, positions.shape=}")
+
+        diff_mean_zero = np.abs(positions - mean_zero)
+        diff_matrix = np.abs(positions[:, np.newaxis] - positions)
+        # print(f"{diff_mean_zero, diff_mean_zero.shape=}")
         # print(f"{diff_matrix, diff_matrix.shape=}")
 
+        dist_mean_zero = np.linalg.norm(diff_mean_zero, axis=1)
         dist_matrix = np.linalg.norm(diff_matrix, axis=2)
-        # print(f"{dist_matrix, dist_matrix.shape=}")
         dist_matrix = np.triu(dist_matrix)
-        # print(f"{dist_matrix, dist_matrix.shape=}")
-
         dists = dist_matrix[np.nonzero(dist_matrix)]
+        # print(f"{dist_mean_zero, dist_mean_zero.shape=}")
+        # print(f"{dist_matrix, dist_matrix.shape=}")
         # print(f"{dists=}")
 
         distance_df.loc[len(distance_df)] = [
             instance_idx, instance_dict['scene'], instance_dict['video'], instance_dict['timestep'],
-            len(instance_dict['agents']), np.max(dists), np.mean(dists)
+            len(instance_dict['agents']), np.max(dists), np.mean(dists), np.max(dist_mean_zero), np.mean(dist_mean_zero)
         ]
 
         if instance_idx == stop_at:
@@ -76,20 +93,31 @@ def get_greatest_distance_m():
     distance_df['px_ref'] = np.NAN
     distance_df['m_ref'] = np.NAN
 
-    for index, row in distance_df.iterrows():
+    for index, row in tqdm(distance_df.iterrows()):
         # print(f"{index=}")
         # print(f"{row['scene'], row['video']=}")
         # print(f"{conf.PX_PER_M.loc[row['scene'], row['video']]['px']=}")
         distance_df.loc[index, 'px_ref'] = conf.PX_PER_M.loc[row['scene'], row['video']]['px']
         distance_df.loc[index, 'm_ref'] = conf.PX_PER_M.loc[row['scene'], row['video']]['m']
 
-    distance_df['max_dist_m'] = distance_df['max_dist_px'] * distance_df['m_ref'] / distance_df['px_ref']
-    distance_df['mean_dist_m'] = distance_df['mean_dist_px'] * distance_df['m_ref'] / distance_df['px_ref']
-    # print(f"{distance_df=}")
-    row_max_dist = distance_df['max_dist_m'].idxmax()
-    print(f"{row_max_dist=}")
+    distance_df['m/px'] = distance_df['m_ref'] / distance_df['px_ref']
 
-    print(f"Maximum inter-agent distance in dataset: {distance_df.iloc[row_max_dist]['max_dist_m']} [m]")
+    distance_df['max_dist_inter_agent_m'] = distance_df['max_dist_inter_agent_px'] * distance_df['m/px']
+    distance_df['mean_dist_inter_agent_m'] = distance_df['mean_dist_inter_agent_px'] * distance_df['m/px']
+    distance_df['max_dist_mean_zero_m'] = distance_df['max_dist_mean_zero_px'] * distance_df['m/px']
+    distance_df['mean_dist_mean_zero_m'] = distance_df['mean_dist_mean_zero_px'] * distance_df['m/px']
+
+    # print(f"{distance_df=}")
+    row_max_dist_inter_agent = distance_df['max_dist_inter_agent_m'].idxmax()
+    row_max_dist_mean_zero = distance_df['max_dist_mean_zero_m'].idxmax()
+    print(f"{row_max_dist_inter_agent=}")
+    print(f"{row_max_dist_mean_zero=}")
+
+    print(f"Maximum inter-agent distance in dataset: "
+          f"{distance_df.iloc[row_max_dist_inter_agent]['max_dist_inter_agent_m']} [m]")
+    print(f"Maximum inter-agent distance in dataset: "
+          f"{distance_df.iloc[row_max_dist_mean_zero]['max_dist_mean_zero_m']} [m]")
+
     # idx_ = distance_df.iloc[row_max_dist]['idx']
     # print(f"{idx_=}")
     # instance = dataset.__getitem__(idx_)
