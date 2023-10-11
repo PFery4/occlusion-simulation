@@ -10,7 +10,10 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", 
 # (this might not always be the case, as with deathCircle video3 for example, which is filming closer to the ground
 # than the other videos of this scene). The purpose of those measurements is to obtain a *rough* estimate for a
 # pixel/meter conversion
-PX_PER_M = pd.read_csv(os.path.join(REPO_ROOT, "config", "pixel_to_meter.txt"), sep=", ", index_col=('scene', 'video'))
+PX_PER_M = pd.read_csv(
+    os.path.join(REPO_ROOT, "config", "pixel_to_meter.txt"),
+    sep=", ", index_col=('scene', 'video'), engine='python'
+)
 
 
 def get_config(config_filename) -> dict:
