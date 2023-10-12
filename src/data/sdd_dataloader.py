@@ -163,7 +163,7 @@ class StanfordDroneDataset(Dataset):
 
         agents = [StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id]) for agent_id in lookup["targets"]]
 
-        # todo: maybe consider doing something with partially observed agents in the delivery of the instance_dict
+        # TODO: maybe consider doing something with partially observed agents in the delivery of the instance_dict
         # # extract the trajectories of partially observed agents
         # for agent_id in lookup["present"]:
         #     # label of the agent of interest
@@ -187,6 +187,8 @@ class StanfordDroneDataset(Dataset):
         #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
         #     is_fully_observed.append(False)
 
+        px_m_row = self.px_per_m.loc[scene, video]
+
         instance_dict = {
             "idx": idx,
             "scene": scene,
@@ -197,6 +199,7 @@ class StanfordDroneDataset(Dataset):
             "future_window": window[self.T_obs:],
             "full_window": window,
             "scene_image": image,
+            "px_per_m": float(px_m_row['px'] / px_m_row['m'])
         }
 
         return instance_dict
