@@ -197,7 +197,7 @@ class StanfordDroneDataset(Dataset):
             "future_window": window[self.T_obs:],
             "full_window": window,
             "scene_image": image,
-            "px/m": self.coord_conv.loc[scene, video]['px/m']
+            "px/m": self.coord_conv.loc[scene, video]['px/m'],
             "m/px": self.coord_conv.loc[scene, video]['m/px']
         }
 
