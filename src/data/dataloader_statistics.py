@@ -82,6 +82,8 @@ def get_greatest_distance_m():
         dist_matrix = np.linalg.norm(diff_matrix, axis=2)
         dist_matrix = np.triu(dist_matrix)
         dists = dist_matrix[np.nonzero(dist_matrix)]
+        if not np.any(dists):
+            dists = np.array([0.0])
         # print(f"{dist_mean_zero, dist_mean_zero.shape=}")
         # print(f"{dist_matrix, dist_matrix.shape=}")
         # print(f"{dists=}")
@@ -115,53 +117,56 @@ def get_greatest_distance_m():
     # print(f"{row_max_dist_inter_agent=}")
     # print(f"{row_max_dist_mean_zero=}")
 
-    print(f"Maximum inter-agent distance in dataset:\n"
-          f"dataset index: {distance_df.iloc[row_max_dist_inter_agent]['idx']}\n"
-          f"{distance_df.iloc[row_max_dist_inter_agent]['max_dist_inter_agent_m']} [m]\n")
-    print(f"Maximum inter-agent distance in dataset:\n"
-          f"dataset index: {distance_df.iloc[row_max_dist_mean_zero]['idx']}\n"
-          f"{distance_df.iloc[row_max_dist_mean_zero]['max_dist_mean_zero_m']} [m]\n")
+    summarystr = f"Maximum inter-agent distance in dataset:\n"\
+                 f"dataset index: {distance_df.iloc[row_max_dist_inter_agent]['idx']}\n"\
+                 f"{distance_df.iloc[row_max_dist_inter_agent]['max_dist_inter_agent_m']} [m]\n\n"\
+                 f"Maximum distance to mean position at t=0 in dataset:\n"\
+                 f"dataset index: {distance_df.iloc[row_max_dist_mean_zero]['idx']}\n"\
+                 f"{distance_df.iloc[row_max_dist_mean_zero]['max_dist_mean_zero_m']} [m]\n"
+
+    print(summarystr)
 
     fig, ax = plt.subplots(2, 4)
 
     # Pixels
-    ax[0, 0].scatter(distance_df['n_agents'], distance_df['mean_dist_inter_agent_px'], marker='x', c='r')
+    scatter_kwargs = {'marker': '.', 'alpha': 0.6, 'linewidths': 0.0}
+    ax[0, 0].scatter(distance_df['n_agents'], distance_df['mean_dist_inter_agent_px'], c='r', **scatter_kwargs)
     ax[0, 0].set_title('Mean inter-agent distance')
     ax[0, 0].set_xlabel('Number of agents')
     ax[0, 0].set_ylabel('Mean inter-agent distance [px]')
 
-    ax[0, 1].scatter(distance_df['n_agents'], distance_df['max_dist_inter_agent_px'], marker='x', c='r')
+    ax[0, 1].scatter(distance_df['n_agents'], distance_df['max_dist_inter_agent_px'], c='r', **scatter_kwargs)
     ax[0, 1].set_title('Max inter-agent distance')
     ax[0, 1].set_xlabel('Number of agents')
     ax[0, 1].set_ylabel('Max inter-agent distance [px]')
 
-    ax[1, 0].scatter(distance_df['n_agents'], distance_df['mean_dist_mean_zero_px'], marker='x', c='r')
+    ax[1, 0].scatter(distance_df['n_agents'], distance_df['mean_dist_mean_zero_px'], c='r', **scatter_kwargs)
     ax[1, 0].set_title('Mean distance to avg. position at t0')
     ax[1, 0].set_xlabel('Number of agents')
     ax[1, 0].set_ylabel('Mean distance to avg. position at t0 [px]')
 
-    ax[1, 1].scatter(distance_df['n_agents'], distance_df['max_dist_mean_zero_px'], marker='x', c='r')
+    ax[1, 1].scatter(distance_df['n_agents'], distance_df['max_dist_mean_zero_px'], c='r', **scatter_kwargs)
     ax[1, 1].set_title('Max distance to avg. position at t0')
     ax[1, 1].set_xlabel('Number of agents')
     ax[1, 1].set_ylabel('Max distance to avg. position at t0 [px]')
 
     # Meters
-    ax[0, 2].scatter(distance_df['n_agents'], distance_df['mean_dist_inter_agent_m'], marker='x', c='b')
+    ax[0, 2].scatter(distance_df['n_agents'], distance_df['mean_dist_inter_agent_m'], c='b', **scatter_kwargs)
     ax[0, 2].set_title('Mean inter-agent distance')
     ax[0, 2].set_xlabel('Number of agents')
     ax[0, 2].set_ylabel('Mean inter-agent distance [m]')
 
-    ax[0, 3].scatter(distance_df['n_agents'], distance_df['max_dist_inter_agent_m'], marker='x', c='b')
+    ax[0, 3].scatter(distance_df['n_agents'], distance_df['max_dist_inter_agent_m'], c='b', **scatter_kwargs)
     ax[0, 3].set_title('Max inter-agent distance')
     ax[0, 3].set_xlabel('Number of agents')
     ax[0, 3].set_ylabel('Max inter-agent distance [m]')
 
-    ax[1, 2].scatter(distance_df['n_agents'], distance_df['mean_dist_mean_zero_m'], marker='x', c='b')
+    ax[1, 2].scatter(distance_df['n_agents'], distance_df['mean_dist_mean_zero_m'], c='b', **scatter_kwargs)
     ax[1, 2].set_title('Mean distance to avg. position at t0')
     ax[1, 2].set_xlabel('Number of agents')
     ax[1, 2].set_ylabel('Mean distance to avg. position at t0 [m]')
 
-    ax[1, 3].scatter(distance_df['n_agents'], distance_df['max_dist_mean_zero_m'], marker='x', c='b')
+    ax[1, 3].scatter(distance_df['n_agents'], distance_df['max_dist_mean_zero_m'], c='b', **scatter_kwargs)
     ax[1, 3].set_title('Max distance to avg. position at t0')
     ax[1, 3].set_xlabel('Number of agents')
     ax[1, 3].set_ylabel('Max distance to avg. position at t0 [m]')
@@ -170,7 +175,9 @@ def get_greatest_distance_m():
     # plt.subplot_tool()
 
     if save:
-        save_path = os.path.join(conf.REPO_ROOT, config['results']['fig_path'])
+        save_path = os.path.join(conf.REPO_ROOT, config['results']['fig_path'], 'distances')
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
         assert os.path.exists(save_path)
         print(f"saving figure of distances to:\n{save_path}")
         # print(plt.get_backend())
@@ -178,6 +185,8 @@ def get_greatest_distance_m():
         # manager.resize(*manager.window.maxsize())
         fig.set_size_inches(20, 12)
         plt.savefig(os.path.join(save_path, 'distances_figure.png'), bbox_inches='tight', dpi=100)
+        with open(os.path.join(save_path, 'distances_summary.txt'), 'w') as txt_file:
+            print(summarystr, file=txt_file)
 
     if show:
         plt.show()
@@ -219,5 +228,5 @@ def show_coord_convs():
 if __name__ == '__main__':
     # get_summary_n_agents_per_video()
     # make_coord_conversion_dataframe()
-    show_coord_convs()
-    # get_greatest_distance_m()
+    # show_coord_convs()
+    get_greatest_distance_m()
