@@ -101,11 +101,8 @@ def get_greatest_distance_m():
     for index, row in tqdm(distance_df.iterrows()):
         # print(f"{index=}")
         # print(f"{row['scene'], row['video']=}")
-        # print(f"{conf.PX_PER_M.loc[row['scene'], row['video']]['px']=}")
-        distance_df.loc[index, 'px_ref'] = conf.PX_PER_M.loc[row['scene'], row['video']]['px']
-        distance_df.loc[index, 'm_ref'] = conf.PX_PER_M.loc[row['scene'], row['video']]['m']
-
-    distance_df['m/px'] = distance_df['m_ref'] / distance_df['px_ref']
+        # print(f"{conf.COORD_CONV.loc[row['scene'], row['video']]['px']=}")
+        distance_df.loc[index, 'm/px'] = conf.COORD_CONV.loc[row['scene'], row['video']]['m/px']
 
     distance_df['max_dist_inter_agent_m'] = distance_df['max_dist_inter_agent_px'] * distance_df['m/px']
     distance_df['mean_dist_inter_agent_m'] = distance_df['mean_dist_inter_agent_px'] * distance_df['m/px']
@@ -194,6 +191,23 @@ def get_greatest_distance_m():
     # plt.show()
 
 
+def make_coord_conversion_dataframe():
+    file_dir = os.path.join(conf.REPO_ROOT, 'config')
+    file_path = os.path.join(file_dir, 'pixel_to_meter.txt')
+    px_per_m_df = pd.read_csv(
+        file_path, sep=', ', engine='python'
+    )
+
+    px_per_m_df['px/m'] = px_per_m_df['px'] / px_per_m_df['m']
+    px_per_m_df['m/px'] = px_per_m_df['m'] / px_per_m_df['px']
+
+    print(f"{px_per_m_df=}")
+
+    new_file_path = os.path.join(file_dir, 'coordinates_conversion.txt')
+    px_per_m_df.to_csv(new_file_path, sep=';', index=False)
+
+
 if __name__ == '__main__':
     # get_summary_n_agents_per_video()
     get_greatest_distance_m()
+    # make_coord_conversion_dataframe()
