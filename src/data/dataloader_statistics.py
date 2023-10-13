@@ -207,7 +207,17 @@ def make_coord_conversion_dataframe():
     px_per_m_df.to_csv(new_file_path, sep=';', index=False)
 
 
+def show_coord_convs():
+    fig, ax = plt.subplots()
+    ax.scatter(conf.COORD_CONV['m'], conf.COORD_CONV['px'])
+    ax.set_xlabel('[m]')
+    ax.set_ylabel('[px]')
+    ax.set_title('SDD: [px] vs. [m]')
+    plt.show()
+
+
 if __name__ == '__main__':
     # get_summary_n_agents_per_video()
-    get_greatest_distance_m()
     # make_coord_conversion_dataframe()
+    show_coord_convs()
+    # get_greatest_distance_m()
