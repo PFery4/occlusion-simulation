@@ -2,17 +2,16 @@ import os
 import yaml
 import pandas as pd
 
+# the directory to the root of the repository
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
+
 # homography data: for each scene, we measure a distance in pixel space and real physical space.
 # We make use of landmarks present in the scene to obtain corresponding measurements in image and real space.
-# Bear in mind that the measurements were taken from one individual image for a whole scene.
-# Scenes contain multiple videos; we assume every video for a given scene is take from roughly the same altitude
-# (this might not always be the case, as with deathCircle video3 for example, which is filming closer to the ground
-# than the other videos of this scene). The purpose of those measurements is to obtain a *rough* estimate for a
-# pixel/meter conversion
-PX_PER_M = pd.read_csv(
-    os.path.join(REPO_ROOT, "config", "pixel_to_meter.txt"),
-    sep=", ", index_col=('scene', 'video'), engine='python'
+# Bear in mind that the measurements were taken from one individual image for a whole video.
+# The purpose of those measurements is to obtain a *rough* estimate for a pixel/meter conversion.
+COORD_CONV = pd.read_csv(
+    os.path.join(REPO_ROOT, 'config', 'coordinates_conversion.txt'),
+    sep=';', index_col=('scene', 'video')
 )
 
 

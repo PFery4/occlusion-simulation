@@ -26,7 +26,7 @@ class StanfordDroneDataset(Dataset):
         self.min_n = None
         self.agent_classes = None
         self.other_agents = None
-        self.px_per_m = conf.PX_PER_M
+        self.coord_conv = conf.COORD_CONV
 
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
@@ -187,8 +187,6 @@ class StanfordDroneDataset(Dataset):
         #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
         #     is_fully_observed.append(False)
 
-        px_m_row = self.px_per_m.loc[scene, video]
-
         instance_dict = {
             "idx": idx,
             "scene": scene,
@@ -199,7 +197,8 @@ class StanfordDroneDataset(Dataset):
             "future_window": window[self.T_obs:],
             "full_window": window,
             "scene_image": image,
-            "px_per_m": float(px_m_row['px'] / px_m_row['m'])
+            "px/m": self.coord_conv.loc[scene, video]['px/m']
+            "m/px": self.coord_conv.loc[scene, video]['m/px']
         }
 
         return instance_dict
