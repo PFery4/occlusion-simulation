@@ -10,14 +10,17 @@ import uuid
 from src.data.sdd_agent import StanfordDroneAgent
 import src.data.config as conf
 import src.data.sdd_data_processing as sdd_data_processing
+from typing import Dict, Optional
 
 
 class StanfordDroneDataset(Dataset):
 
-    def __init__(self, config_dict):
+    def __init__(self, config_dict: Dict, split: Optional[str] = None):
+        assert split in ('train', 'val', 'test') or split is None
         self.root = config_dict["dataset"]["path"]
         datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
         self.pickle_id = config_dict["dataset"].get("pickle_id", None)
+        self.split = split
 
         self.orig_fps = None
         self.fps = None
@@ -141,6 +144,10 @@ class StanfordDroneDataset(Dataset):
             self.dataset_path = os.path.join(datasets_path, self.pickle_id)
             self.save_data()
 
+        # subsetting the data from the splits we are interested in
+        if self.split is not None:
+            self.split_subset()
+
     def __len__(self) -> int:
         return len(self.lookuptable)
 
@@ -202,6 +209,16 @@ class StanfordDroneDataset(Dataset):
         }
 
         return instance_dict
+
+    def split_subset(self):
+        scene_video_indices_lookuptable = self.lookuptable.index.droplevel(2)
+        scene_video_indices_frames = self.frames.index
+        split_indices = scene_video_indices_lookuptable.unique()[
+            np.array(conf.SCENE_SPLIT) == self.split
+            ]
+        self.lookuptable = self.lookuptable[scene_video_indices_lookuptable.isin(split_indices)]
+        self.frames = self.frames[scene_video_indices_frames.isin(split_indices)]
+        assert (self.lookuptable.index.droplevel(2).unique() == self.frames.index.unique()).all()
 
     def find_idx(self, scene: str, video: str, timestep: int) -> int:
         video_slice = self.lookuptable.index.get_loc((scene, video, timestep))
@@ -267,8 +284,8 @@ class StanfordDroneDataset(Dataset):
 
 
 class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
-    def __init__(self, config_dict):
-        super(StanfordDroneDatasetWithOcclusionSim, self).__init__(config_dict)
+    def __init__(self, config_dict: Dict, split: Optional[str] = None):
+        super().__init__(config_dict=config_dict, split=split)
 
         assert os.path.exists(self.dataset_path), f"ERROR: Path does not exist: {self.dataset_path}"
         print(f"Extracting simulation pickle files from:\n{self.dataset_path}")
@@ -295,28 +312,29 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         self.occlusion_table = pd.concat(occlusion_tables, keys=sim_ids, names=["sim_id"])
 
-        # TODO: incorporate proper processing by pred model, of empty occlusion cases.
         # extracting every case for which no occlusion simulation is available
         all_indices = [
             (sim_id, *index, n-1)
             for sim_id, n in zip(sim_ids, n_trials)
             for index in self.lookuptable.index
         ]
-        empty_indices = pd.Index(list(set(all_indices).difference(self.occlusion_table.index)))
-
-        self.occlusion_cases = len(self.occlusion_table)
-        self.empty_cases = len(empty_indices)
+        empty_indices = pd.Index(list(set(all_indices).difference(self.occlusion_table.index))).sort_values()
+        keep = (empty_indices.droplevel(4)[:-1] != empty_indices.droplevel(4)[1:])
+        keep = np.concatenate([[True], keep])
+        empty_indices = empty_indices[keep]
 
         self.occlusion_table = self.occlusion_table.reindex(
             [*self.occlusion_table.index, *empty_indices]
         ).fillna(value=np.nan)
         self.occlusion_table.sort_index(inplace=True)
 
-        print(f"Number of instances with an occlusion simulation: {self.occlusion_cases}")
-        print(f"Number of instances without occlusion simulation: {self.empty_cases}")
-        print(f"{self.occlusion_cases / len(self.occlusion_table) * 100:.2f}"
-              f"% of all instances have a simulated occlusion")
-        assert len(self.occlusion_table) == len(self.lookuptable) * sum(n_trials)
+        if self.split is not None:
+            self.split_subset_occlusion_table()
+
+        self.empty_cases = self.occlusion_table['ego_point'].isna().sum()
+        self.occlusion_cases = len(self.occlusion_table) - self.empty_cases
+
+        self.print_occlusion_summary()
 
     def __len__(self) -> int:
         return len(self.occlusion_table)
@@ -356,6 +374,18 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
 
         return instance_dict
 
+    def print_occlusion_summary(self) -> None:
+        print(f"Total Number of instances:\t\t\t\t\t\t\t{len(self)}")
+        print(f"Number of instances with an occlusion simulation:\t{self.occlusion_cases} ({self.occlusion_cases / len(self) * 100:.2f}%)")
+        print(f"Number of instances without occlusion simulation:\t{self.empty_cases} ({self.empty_cases / len(self) * 100:.2f}%)")
+
+    def split_subset_occlusion_table(self) -> None:
+        scene_video_indices_occlusion_table = self.occlusion_table.index.droplevel([0, 3, 4])
+        split_indices = self.lookuptable.index.droplevel(2).unique()
+        self.occlusion_table = self.occlusion_table[scene_video_indices_occlusion_table.isin(split_indices)]
+        assert (self.lookuptable.index.droplevel(2).unique() ==
+                self.occlusion_table.index.droplevel([0, 3, 4]).unique()).all()
+
     def find_occl_idx(self, sim_id: str, scene: str, video: str, timestep: int, trial: int) -> int:
         video_slice = self.occlusion_table.index.get_loc((sim_id, scene, video, timestep, trial))
         return int(video_slice)
@@ -368,13 +398,12 @@ if __name__ == '__main__':
 
     config = conf.get_config("config")
 
-    # dataset = StanfordDroneDataset(config_dict=config)
-    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    # dataset = StanfordDroneDataset(config_dict=config, split='train')
+    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config, split=None)
     print(f"{len(dataset)=}")
 
-    print(f"{dataset.__class__}.__getitem__() dictionary keys:")
-    [print(k) for k in dataset.__getitem__(0).keys()]
-    print()
+    # print(f"{dataset.__class__}.__getitem__() dictionary keys:")
+    # [print(k) for k in dataset.__getitem__(0).keys()]
 
     n_rows = 2
     n_cols = 2
@@ -384,6 +413,8 @@ if __name__ == '__main__':
     fig.canvas.manager.set_window_title(f"{dataset.__class__}.__getitem__()")
 
     idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
+
+    print(f"{len(dataset)=}")
 
     print(f"visualizing the following randomly chosen samples: {idx_samples}")
     for ax_k, idx in enumerate(idx_samples):

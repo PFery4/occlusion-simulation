@@ -1,6 +1,7 @@
 import os
 import yaml
 import pandas as pd
+from random import Random
 
 # the directory to the root of the repository
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
@@ -13,6 +14,10 @@ COORD_CONV = pd.read_csv(
     os.path.join(REPO_ROOT, 'config', 'coordinates_conversion.txt'),
     sep=';', index_col=('scene', 'video')
 )
+
+rng = Random(0)
+SCENE_SPLIT = ["train"] * 42 + ["val"] * 9 + ["test"] * 9
+rng.shuffle(SCENE_SPLIT)
 
 
 def get_config(config_filename) -> dict:
