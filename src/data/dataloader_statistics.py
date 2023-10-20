@@ -226,6 +226,7 @@ def show_coord_convs():
 
 
 if __name__ == '__main__':
+    print("Hello!")
     # get_summary_n_agents_per_video()
     # make_coord_conversion_dataframe()
     # show_coord_convs()
