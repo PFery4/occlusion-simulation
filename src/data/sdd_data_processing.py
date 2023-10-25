@@ -51,7 +51,7 @@ def completely_lost_trajs_removed_from(annot_df: pd.DataFrame):
             annot_df = annot_df[annot_df["Id"] != agent_id]
 
         # also deleting trajectories which are way too short to conduct any meaningful kind of prediction
-        if np.count_nonzero(~agent_df["lost"].values) < 4:      # TODO: maybe change the '4' to a more meaningful value later (perhaps t_obs + t_pred, something like this...)
+        if np.count_nonzero(~agent_df["lost"].values) < 4:
             # print(f"DELETING AGENT {agent_id}: TOO SHORT")
             annot_df = annot_df[annot_df["Id"] != agent_id]
     return annot_df
@@ -141,6 +141,6 @@ def perform_preprocessing_pipeline(annot_df: pd.DataFrame, target_fps: float = 2
     annot_df = completely_lost_trajs_removed_from(annot_df)
     annot_df = keep_masks_in(annot_df)
     annot_df = annot_df[annot_df["keep"]]
-    annot_df = subsample_timesteps_from(annot_df, target_fps=target_fps, orig_fps=orig_fps)     # TODO: move timestep subsampling earlier in preprocessing pipeline?
+    annot_df = subsample_timesteps_from(annot_df, target_fps=target_fps, orig_fps=orig_fps)
 
     return annot_df
