@@ -334,6 +334,11 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         self.empty_cases = self.occlusion_table['ego_point'].isna().sum()
         self.occlusion_cases = len(self.occlusion_table) - self.empty_cases
 
+        # adding to each occlusion row the corresponding index of self.lookuptable
+        self.occlusion_table['lookup_idx'] = self.lookuptable.index.get_indexer(
+            self.occlusion_table.index.droplevel(['sim_id', 'trial'])
+        )
+
         self.print_occlusion_summary()
 
     def __len__(self) -> int:
@@ -346,7 +351,7 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         sim_id, scene, video, timestep, trial = occlusion_case.name
 
         # find the corresponding index in self.lookuptable
-        lookup_idx = self.find_idx(scene=scene, video=video, timestep=timestep)
+        lookup_idx = occlusion_case['lookup_idx']
 
         instance_dict = super(StanfordDroneDatasetWithOcclusionSim, self).__getitem__(lookup_idx)
 
@@ -413,6 +418,7 @@ if __name__ == '__main__':
     fig.canvas.manager.set_window_title(f"{dataset.__class__}.__getitem__()")
 
     idx_samples = np.sort(np.random.randint(0, len(dataset), n_rows * n_cols))
+    idx_samples = [0, 1, 2, 3]
 
     print(f"{len(dataset)=}")
 
