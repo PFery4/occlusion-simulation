@@ -352,7 +352,15 @@ def get_video_resolutions():
     print(data_dir)
     assert os.path.exists(data_dir)
 
-    whds = []
+    image_summaries_df = pd.DataFrame(
+        columns=[
+            'scene', 'video',
+            'width [px]', 'height [px]', 'diagonal [px]',
+            'width [m]', 'height [m]', 'diagonal [m]',
+            'aspect ratio'
+        ]
+    )
+
     counter = 0
     for dir in os.scandir(data_dir):
         for video in os.scandir(dir):
@@ -367,19 +375,29 @@ def get_video_resolutions():
                 a = img_file.read(2)
                 width = (a[0] << 8) + a[1]
 
-                print(f"{os.path.basename(file)}: {width} x {height}")
+                # print(f"{os.path.basename(file)}: {width} x {height}")
+                m_by_px = conf.COORD_CONV.loc[dir.name, video.name]['m/px']
 
-                whds.append(
-                    (width, height, np.sqrt(width**2 + height**2), np.min([width, height]) / np.max([width, height]),
-                     width / conf.COORD_CONV, height / conf.COORD_CONV)
-                )
+                width_m = width * m_by_px
+                height_m = height * m_by_px
 
-    whds = list(dict.fromkeys(whds))
+                image_summaries_df.loc[len(image_summaries_df)] = [
+                    dir.name, video.name,
+                    width, height, np.sqrt(width**2 + height**2),
+                    width_m, height_m, np.sqrt(width_m**2 + height_m**2),
+                    np.min([width, height]) / np.max([width, height])
+                ]
+    image_summaries_df.set_index(keys=['scene', 'video'], inplace=True)
+    image_summaries_df.sort_index(inplace=True)
+    print("Image resolution summary:")
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', 120):
+        print(image_summaries_df)
 
-    print(f"All different resolutions:")
-    [print(wh) for wh in whds]
-    print(counter)
-    print(len(whds))
+    print()
+    print(f"min width [px]: {min(image_summaries_df['width [px]'])}")
+    print(f"max width [px]: {max(image_summaries_df['width [px]'])}")
+    print(f"min height [px]: {min(image_summaries_df['height [px]'])}")
+    print(f"max height [px]: {max(image_summaries_df['height [px]'])}")
 
 
 def copy_reference_images_to_figures_dir():
