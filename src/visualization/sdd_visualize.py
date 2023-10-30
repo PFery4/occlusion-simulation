@@ -357,7 +357,7 @@ def get_video_resolutions():
             'scene', 'video',
             'width [px]', 'height [px]', 'diagonal [px]',
             'width [m]', 'height [m]', 'diagonal [m]',
-            'aspect ratio'
+            'aspect ratio', 'm/px', 'px/m'
         ]
     )
 
@@ -377,6 +377,7 @@ def get_video_resolutions():
 
                 # print(f"{os.path.basename(file)}: {width} x {height}")
                 m_by_px = conf.COORD_CONV.loc[dir.name, video.name]['m/px']
+                px_by_m = conf.COORD_CONV.loc[dir.name, video.name]['px/m']
 
                 width_m = width * m_by_px
                 height_m = height * m_by_px
@@ -385,8 +386,16 @@ def get_video_resolutions():
                     dir.name, video.name,
                     width, height, np.sqrt(width**2 + height**2),
                     width_m, height_m, np.sqrt(width_m**2 + height_m**2),
-                    np.min([width, height]) / np.max([width, height])
+                    np.min([width, height]) / np.max([width, height]), m_by_px, px_by_m
                 ]
+
+    S = 80
+    image_summaries_df['min_padded_dim [m]'] = image_summaries_df['diagonal [m]'] + S
+    image_summaries_df['min_pad_width [m]'] = (image_summaries_df['min_padded_dim [m]'] - image_summaries_df['width [m]']) / 2
+    image_summaries_df['min_pad_height [m]'] = (image_summaries_df['min_padded_dim [m]'] - image_summaries_df['height [m]']) / 2
+    image_summaries_df['min_pad_width [px]'] = image_summaries_df['min_pad_width [m]'] * image_summaries_df['px/m']
+    image_summaries_df['min_pad_height [px]'] = image_summaries_df['min_pad_height [m]'] * image_summaries_df['px/m']
+
     image_summaries_df.set_index(keys=['scene', 'video'], inplace=True)
     image_summaries_df.sort_index(inplace=True)
     print("Image resolution summary:")
@@ -398,6 +407,9 @@ def get_video_resolutions():
     print(f"max width [px]: {max(image_summaries_df['width [px]'])}")
     print(f"min height [px]: {min(image_summaries_df['height [px]'])}")
     print(f"max height [px]: {max(image_summaries_df['height [px]'])}")
+    print(f"min px/m ratio: {min(conf.COORD_CONV['px/m'])}")
+    print(f"max px/m ratio: {max(conf.COORD_CONV['px/m'])}")
+    print(f"min pad value: {max(*image_summaries_df['min_pad_width [px]'], *image_summaries_df['min_pad_height [px]'])}")
 
 
 def copy_reference_images_to_figures_dir():
