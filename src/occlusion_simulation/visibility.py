@@ -1,3 +1,5 @@
+import torch
+Tensor = torch.Tensor
 import numpy as np
 import skgeom as sg
 from typing import List, Tuple
@@ -27,6 +29,20 @@ def compute_visibility_polygon(
     return visibility_polygon(ego_point=ego_point, arrangement=ego_visi_arrangement)
 
 
+def torch_compute_visipoly(
+        ego_point: Tensor,
+        occluder: Tensor,
+        boundary: sg.Polygon
+) -> sg.Polygon:
+    # ego_point [1, 2]
+    # occluder [2, 2]
+    # boundary [2]
+    ego_visi_arrangement = sg.arrangement.Arrangement()
+    ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder[0]), sg.Point2(*occluder[1])))
+    [ego_visi_arrangement.insert(segment) for segment in list(boundary.edges)]
+    return visibility_polygon(ego_point=tuple(ego_point.flatten()), arrangement=ego_visi_arrangement)
+
+
 def agent_occlusion_masks(
         agents: List[StanfordDroneAgent],
         time_window: np.array,
@@ -46,4 +62,14 @@ def occlusion_mask(
     return np.array([
         ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE
         for point in points
+    ])
+
+
+def torch_occlusion_mask(
+        points: Tensor,
+        ego_visipoly: sg.Polygon
+) -> Tensor:
+    # points [N, 2]
+    return torch.Tensor([
+        ego_visipoly.oriented_side(sg.Point2(*point)) == sg.Sign.POSITIVE for point in points
     ])
