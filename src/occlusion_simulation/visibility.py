@@ -34,13 +34,13 @@ def torch_compute_visipoly(
         occluder: Tensor,
         boundary: sg.Polygon
 ) -> sg.Polygon:
-    # ego_point [1, 2]
+    # ego_point [2]
     # occluder [2, 2]
     # boundary [2]
     ego_visi_arrangement = sg.arrangement.Arrangement()
     ego_visi_arrangement.insert(sg.Segment2(sg.Point2(*occluder[0]), sg.Point2(*occluder[1])))
     [ego_visi_arrangement.insert(segment) for segment in list(boundary.edges)]
-    return visibility_polygon(ego_point=tuple(ego_point.flatten()), arrangement=ego_visi_arrangement)
+    return visibility_polygon(ego_point=tuple(ego_point), arrangement=ego_visi_arrangement)
 
 
 def agent_occlusion_masks(
