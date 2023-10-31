@@ -334,11 +334,18 @@ def runsim_on_entire_dataset() -> None:
     # setting the random seed (for reproducibility)
     np.random.seed(config["occlusion_simulator"]["rng_seed"])
 
-    dataset = StanfordDroneDataset(config_dict=config)
+    dataset = StanfordDroneDataset(config_dict=config, split=None)
+    sim_id = config['occlusion_simulator']['sim_id']
 
     # preparing the directory for saving simulation outputs
     pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config["dataset"]["pickle_path"]))
-    sim_folder = os.path.join(pickle_path, dataset.pickle_id, str(uuid.uuid4()))
+
+    if os.path.exists(os.path.join(pickle_path, dataset.pickle_id, sim_id)):
+        old_sim_id = sim_id
+        sim_id = str(uuid.uuid4())
+        print(f"Simulation run sim_id {old_sim_id} already exists. Instead of overwriting data, we will use another sim_id: {sim_id}")
+
+    sim_folder = os.path.join(pickle_path, dataset.pickle_id, sim_id)
     print(f"Creating simulation directory:\n{sim_folder}")
     os.makedirs(sim_folder)
     assert os.path.exists(sim_folder)
