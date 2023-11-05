@@ -4,7 +4,7 @@ import skgeom as sg
 import numpy as np
 from typing import List
 import src.visualization.sdd_visualize as sdd_visualize
-from src.data.sdd_dataloader import StanfordDroneDataset
+from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneDatasetWithOcclusionSim
 from src.occlusion_simulation.simple_occlusion import simulate_occlusions
 from src.visualization.plot_utils import plot_sg_polygon
 
@@ -329,9 +329,13 @@ def save_simulation_cases():
 
     n_examples = 100
     clear_figure_folder = True
+    use_sim_data = True         # If False, will run the simulation on a regular version of the dataset, without occlusion cases
 
     config = conf.get_config("config")
-    dataset = StanfordDroneDataset(config_dict=config)
+    if use_sim_data:
+        dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
+    else:
+        dataset = StanfordDroneDataset(config_dict=config)
 
     # defining path and creating it if it does not exit
     save_path = os.path.join(conf.REPO_ROOT, config['results']['fig_path'], 'simulation_examples')
@@ -357,51 +361,52 @@ def save_simulation_cases():
         fig, ax = plt.subplots(gridspec_kw=gs_kw)
         instance_dict = dataset.__getitem__(idx)
 
-        sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"])
         sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict, lgnd=False)
 
-        img = instance_dict["scene_image"]
-        agents = instance_dict["agents"]
-        past_window = instance_dict["past_window"]
-        future_window = instance_dict["future_window"]
+        if not use_sim_data:
 
-        try:
-            simulation_dict = simulate_occlusions(
-                config=config["occlusion_simulator"],
-                image_res=tuple(img.shape[:2]),
-                agents=agents,
-                past_window=past_window,
-                future_window=future_window
-            )
+            img = instance_dict["scene_image"]
+            agents = instance_dict["agents"]
+            past_window = instance_dict["past_window"]
+            future_window = instance_dict["future_window"]
 
-            occlusion_target_coords = simulation_dict["occlusion_target_coords"]
-            ego_point = simulation_dict["ego_point"]
-            occluders = simulation_dict["occluders"]
-            occluded_regions = simulation_dict["occluded_regions"]
+            try:
+                simulation_dict = simulate_occlusions(
+                    config=config["occlusion_simulator"],
+                    image_res=tuple(img.shape[:2]),
+                    agents=agents,
+                    past_window=past_window,
+                    future_window=future_window
+                )
 
-            # visualization part
-            p_occls = [coords[0] for coords in occlusion_target_coords]
-            p_disoccls = [coords[1] for coords in occlusion_target_coords]
-            p1s = [occluder[0] for occluder in occluders]
-            p2s = [occluder[1] for occluder in occluders]
+                occlusion_target_coords = simulation_dict["occlusion_target_coords"]
+                ego_point = simulation_dict["ego_point"]
+                occluders = simulation_dict["occluders"]
+                occluded_regions = simulation_dict["occluded_regions"]
 
-            plot_simulation_step_6(
-                ax=ax,
-                p_occls=p_occls,
-                p_disoccls=p_disoccls,
-                ego_point=ego_point,
-                p1s=p1s,
-                p2s=p2s,
-                occluded_regions=occluded_regions
-            )
+                # visualization part
+                p_occls = [coords[0] for coords in occlusion_target_coords]
+                p_disoccls = [coords[1] for coords in occlusion_target_coords]
+                p1s = [occluder[0] for occluder in occluders]
+                p2s = [occluder[1] for occluder in occluders]
 
-        except Exception as ex:
-            err_count += 1
-            logger.exception("\n\nSimulation Failed:\n")
-            ax.text(
-                sum(ax.get_xlim())/2, sum(ax.get_ylim())/2, "FAILED",
-                fontsize=20, c="red", horizontalalignment="center", verticalalignment="center"
-            )
+                plot_simulation_step_6(
+                    ax=ax,
+                    p_occls=p_occls,
+                    p_disoccls=p_disoccls,
+                    ego_point=ego_point,
+                    p1s=p1s,
+                    p2s=p2s,
+                    occluded_regions=occluded_regions
+                )
+
+            except Exception as ex:
+                err_count += 1
+                logger.exception("\n\nSimulation Failed:\n")
+                ax.text(
+                    sum(ax.get_xlim())/2, sum(ax.get_ylim())/2, "FAILED",
+                    fontsize=20, c="red", horizontalalignment="center", verticalalignment="center"
+                )
 
         ax.set_title(idx)
 
