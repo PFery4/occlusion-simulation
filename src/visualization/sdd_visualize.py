@@ -158,29 +158,32 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
     :param lgnd: whether to display the legend or not
     """
     assert all(key in instance_dict.keys() for key in ["agents", "past_window", "future_window", "full_window"])
+    scene_image = instance_dict.get('scene_image', np.nan)
+    ego = instance_dict.get('ego_point', np.nan)
+    occluders = instance_dict.get('occluders', np.nan)
 
-    if "scene_image" in instance_dict.keys():
+    if not np.all(np.isnan(scene_image)):
         draw_map_numpy(draw_ax=draw_ax, scene_image=instance_dict["scene_image"])
 
-    if not np.all(np.isnan(instance_dict.get('ego_point'))):
-        draw_ax.scatter(instance_dict["ego_point"][0], instance_dict["ego_point"][1],
-                        s=20, marker="D", color="yellow", alpha=0.9, label="Ego")
+    if not np.all(np.isnan(ego)):
+        assert np.all(~np.isnan(ego)), f"{ego=}"
+        draw_ax.scatter(ego[0], ego[1], s=20, marker='D', color='yellow', alpha=0.9, label='Ego')
 
-    if not np.all(np.isnan(instance_dict.get('occluders'))):
-        for occluder in instance_dict["occluders"]:
-            draw_ax.plot([occluder[0][0], occluder[1][0]], [occluder[0][1], occluder[1][1]],
-                         color="black")
+    if not np.all(np.isnan(occluders)):
+        assert np.all(~np.isnan(occluders)), f"{occluders=}"
+        for occluder in occluders:
+            draw_ax.plot([occluder[0][0], occluder[1][0]], [occluder[0][1], occluder[1][1]], color='black')
 
-    if all(not np.all(np.isnan(instance_dict.get(key))) for key in ["scene_image", "ego_point", "occluders"]):
+    if not np.all(np.isnan(scene_image)) and not np.all(np.isnan(ego)) and not np.all(np.isnan(occluders)):
         # compute visibility polygon
         scene_boundary = poly_gen.default_rectangle(
-            (float(instance_dict["scene_image"].shape[0]),
-             float(instance_dict["scene_image"].shape[1]))
+            (float(scene_image.shape[0]),
+             float(scene_image.shape[1]))
         )
 
         ego_visipoly = visibility.compute_visibility_polygon(
-            ego_point=instance_dict["ego_point"],
-            occluders=instance_dict["occluders"],
+            ego_point=ego,
+            occluders=occluders,
             boundary=scene_boundary
         )
 
@@ -188,24 +191,24 @@ def visualize_training_instance(draw_ax: matplotlib.axes.Axes, instance_dict: di
 
         # compute occlusion masks
         full_window_occlusion_masks = visibility.agent_occlusion_masks(
-            agents=instance_dict["agents"],
-            time_window=instance_dict["full_window"],
+            agents=instance_dict['agents'],
+            time_window=instance_dict['full_window'],
             ego_visipoly=ego_visipoly
         )
         draw_occlusion_states(
             draw_ax=draw_ax,
             agent_trajectories=np.stack(
-                [agent.get_traj_section(instance_dict["full_window"])
-                 for agent in instance_dict["agents"]]
+                [agent.get_traj_section(instance_dict['full_window'])
+                 for agent in instance_dict['agents']]
             ),
             occlusion_masks=full_window_occlusion_masks
         )
 
     draw_agent_trajectories(
         draw_ax=draw_ax,
-        agents=instance_dict["agents"],
-        past_window=instance_dict["past_window"],
-        future_window=instance_dict["future_window"]
+        agents=instance_dict['agents'],
+        past_window=instance_dict['past_window'],
+        future_window=instance_dict['future_window']
     )
 
     if lgnd:
