@@ -8,6 +8,8 @@ from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneDatasetWi
 from src.occlusion_simulation.simple_occlusion import simulate_occlusions
 from src.visualization.plot_utils import plot_sg_polygon
 
+EGO_COLOR = "#DC3220"
+OCCLUDER_COLOR = "#005AB5"
 
 def plot_simulation_step_1(
         ax: matplotlib.axes.Axes,
@@ -59,7 +61,7 @@ def plot_simulation_step_3(
     [plot_sg_polygon(ax, poly, edgecolor="green", facecolor="green", alpha=0.2) for poly in yes_triangles]
     [ax.scatter(*p_occl, marker="x", c="Yellow") for p_occl in p_occls]
     [ax.scatter(*p_disoccl, marker="x", c="Yellow") for p_disoccl in p_disoccls]
-    ax.scatter(*ego_point, marker="x", c="red")
+    ax.scatter(*ego_point, marker="o", c=EGO_COLOR)
     [plot_sg_polygon(ax, poly, edgecolor="orange", facecolor="orange", alpha=0.2) for poly in no_occluder_buffers]
     plot_sg_polygon(ax, ego_buffer, edgecolor="orange", facecolor="orange", alpha=0.2)
     [plot_sg_polygon(ax, poly, edgecolor="yellow", facecolor="yellow", alpha=0.2) for poly in p1_ego_traj_triangles]
@@ -78,9 +80,9 @@ def plot_simulation_step_4(
     # IV. triangulated p1_regions, p1, p1 visibility polygon, p2_ego_traj triangles
     [ax.scatter(*p_occl, marker="x", c="Yellow") for p_occl in p_occls]
     [ax.scatter(*p_disoccl, marker="x", c="Yellow") for p_disoccl in p_disoccls]
-    ax.scatter(*ego_point, marker="x", c="red")
+    ax.scatter(*ego_point, marker="o", c=EGO_COLOR)
     [plot_sg_polygon(ax, poly, edgecolor="yellow", facecolor="yellow", alpha=0.2) for poly in triangulated_p1_regions]
-    [ax.scatter(*point, marker="x", c="purple") for point in p1s]
+    [ax.scatter(*point, marker="x", c=OCCLUDER_COLOR) for point in p1s]
     [plot_sg_polygon(ax, poly, edgecolor="cyan", facecolor="cyan", alpha=0.2) for poly in p1_visipolys]
     [plot_sg_polygon(ax, poly, edgecolor="yellow", facecolor="yellow", alpha=0.2) for poly in p2_ego_traj_triangles]
 
@@ -97,10 +99,10 @@ def plot_simulation_step_5(
     # V. triangulated p2_regions, p2
     [ax.scatter(*p_occl, marker="x", c="Yellow") for p_occl in p_occls]
     [ax.scatter(*p_disoccl, marker="x", c="Yellow") for p_disoccl in p_disoccls]
-    ax.scatter(*ego_point, marker="x", c="red")
+    ax.scatter(*ego_point, marker="o", c=EGO_COLOR)
     [plot_sg_polygon(ax, poly, edgecolor="yellow", facecolor="yellow", alpha=0.2) for poly in triangulated_p2_regions]
-    [ax.scatter(point[0], point[1], marker="x", c="purple") for point in p1s]
-    [ax.scatter(point[0], point[1], marker="x", c="purple") for point in p2s]
+    [ax.scatter(point[0], point[1], marker="x", c=OCCLUDER_COLOR) for point in p1s]
+    [ax.scatter(point[0], point[1], marker="x", c=OCCLUDER_COLOR) for point in p2s]
 
 
 def plot_simulation_step_6(
@@ -115,10 +117,10 @@ def plot_simulation_step_6(
     # VI. occluder, ego_point visibility
     [ax.scatter(*p_occl, marker="x", c="Yellow") for p_occl in p_occls]
     [ax.scatter(*p_disoccl, marker="x", c="Yellow") for p_disoccl in p_disoccls]
-    ax.scatter(*ego_point, marker="x", c="red")
-    [ax.scatter(point[0], point[1], marker="x", c="purple") for point in p1s]
-    [ax.scatter(point[0], point[1], marker="x", c="purple") for point in p2s]
-    [ax.plot([p1[0], p2[0]], [p1[1], p2[1]], c="purple") for p1, p2 in zip(p1s, p2s)]
+    ax.scatter(*ego_point, marker="o", c=EGO_COLOR)
+    [ax.scatter(point[0], point[1], marker="x", c=OCCLUDER_COLOR) for point in p1s]
+    [ax.scatter(point[0], point[1], marker="x", c=OCCLUDER_COLOR) for point in p2s]
+    [ax.plot([p1[0], p2[0]], [p1[1], p2[1]], c=OCCLUDER_COLOR) for p1, p2 in zip(p1s, p2s)]
     [plot_sg_polygon(ax, poly, edgecolor="red", facecolor="red", alpha=0.2) for poly in occluded_regions.polygons]
 
 
@@ -417,5 +419,5 @@ def save_simulation_cases():
 
 
 if __name__ == '__main__':
-    # show_simulation()
-    save_simulation_cases()
+    show_simulation()
+    # save_simulation_cases()
