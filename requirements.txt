@@ -1,16 +1,14 @@
-# This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file> -c conda-forge
-# platform: linux-64
-# python=3.8
-pandas<2.0.0
-matplotlib
-numpy
-scipy
+# Note: install pytorch first
+# Note: install scikit-geometry (either through the conda-forge channel):
+#	$: conda install -c conda-forge scikit-geometry
+# (or by building from source, with CGAL 5.0 installed preemptively
+#	$: python -m pip install -e . -v
+# then, the requirements can be installed:
+# 	$: pip install -r requirements.txt
 shapely
-# scikit-geometry
-pyyaml
+matplotlib
+scipy
+pandas
 tqdm
-# then, pytorch and opencv must be installed with pip in order to prevent dependency conflicts:
-# conda activate <env>
-# pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118 --no-cache-dir
-# pip3 install opencv-python
+opencv-python
+pyyaml
