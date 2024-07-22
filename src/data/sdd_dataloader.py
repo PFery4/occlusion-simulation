@@ -236,24 +236,6 @@ class StanfordDroneDataset(Dataset):
         }
         return metadata_dict
 
-    def find_pickle_id(self, search_dir: str):
-        """
-        looks for a pickle file with same corresponding metadata as self.metadata_dict()
-        :param search_dir: the directory within which to look
-        :return: the path to a valid pickle file, if it exists
-        """
-        from warnings import warn
-        warn("This function is no longer used", DeprecationWarning, stacklevel=2)
-
-        json_files = [os.path.join(search_dir, file) for file in os.listdir(search_dir) if file.endswith(".json")]
-        json_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-
-        for jsonfile in json_files:
-            with open(jsonfile) as f:
-                if json.load(f) == self.metadata_dict():
-                    return f"{os.path.splitext(os.path.basename(jsonfile))[0]}"
-        return None
-
     def save_data(self):
         """
         saves 'self.frames' and 'self.lookuptable' into a pickle file, and the corresponding parameters as a json
