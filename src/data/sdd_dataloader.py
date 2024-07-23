@@ -6,10 +6,8 @@ import cv2
 import torchvision.transforms
 import pickle
 import json
-import uuid
 from src.data.sdd_agent import StanfordDroneAgent
 import src.data.config as conf
-import src.data.sdd_data_processing as sdd_data_processing
 from typing import Dict, Optional
 
 
@@ -18,131 +16,36 @@ class StanfordDroneDataset(Dataset):
     def __init__(self, config_dict: Dict, split: Optional[str] = None):
         assert split in ('train', 'val', 'test') or split is None
         self.root = config_dict["dataset"]["path"]
-        datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
-        self.pickle_id = config_dict["dataset"].get("pickle_id", None)
+        saved_datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        assert os.path.exists(saved_datasets_path), f"ERROR: saved datasets path does not exist:\n{saved_datasets_path}"
+        self.pickle_id = config_dict["dataset"]["pickle_id"]
         self.split = split
 
-        self.orig_fps = None
-        self.fps = None
-        self.T_obs = None
-        self.T_pred = None
-        self.min_n = None
-        self.agent_classes = None
-        self.other_agents = None
         self.coord_conv = conf.COORD_CONV
 
         # to convert cv2 image to torch tensor
         self.img_transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
 
-        if self.pickle_id:
-            self.dataset_path = os.path.join(datasets_path, self.pickle_id)
-            assert os.path.exists(self.dataset_path), f"ERROR: pickle_id does not exist:\n{self.pickle_id}"
-            print(f"Loading dataloader from:\n{self.dataset_path}")
-            json_path = os.path.join(self.dataset_path, "dataset_parameters.json")
-            pickle_path = os.path.join(self.dataset_path, "dataset.pickle")
-            assert os.path.exists(json_path)
-            assert os.path.exists(pickle_path)
+        self.dataset_path = os.path.join(saved_datasets_path, self.pickle_id)
+        assert os.path.exists(self.dataset_path), f"ERROR: dataset directory does not exist:\n{self.dataset_path}"
+        print(f"Loading dataloader from:\n{self.dataset_path}")
+        json_path = os.path.join(self.dataset_path, "dataset_parameters.json")
+        pickle_path = os.path.join(self.dataset_path, "dataset.pickle")
+        assert os.path.exists(json_path)
+        assert os.path.exists(pickle_path)
 
-            with open(json_path) as f:
-                json_dict = json.load(f)
+        with open(json_path) as f:
+            json_dict = json.load(f)
 
-            self.orig_fps = json_dict["orig_fps"]
-            self.fps = json_dict["fps"]
-            self.T_obs = json_dict["T_obs"]
-            self.T_pred = json_dict["T_pred"]
-            self.min_n = json_dict["min_n"]
-            self.agent_classes = json_dict["agent_classes"]
-            self.other_agents = json_dict["other_agents"]
+        self.orig_fps = json_dict["orig_fps"]
+        self.fps = json_dict["fps"]
+        self.T_obs = json_dict["T_obs"]
+        self.T_pred = json_dict["T_pred"]
+        self.min_n = json_dict["min_n"]
+        self.agent_classes = json_dict["agent_classes"]
+        self.other_agents = json_dict["other_agents"]
 
-            self.frames, self.lookuptable = self.load_data(pickle_path)
-
-        else:
-            print("No pickle file found/provided, loading from raw dataset and performing preprocessing")
-
-            self.orig_fps = config_dict["dataset"]["fps"]
-            self.fps = config_dict["hyperparameters"]["fps"]
-            self.T_obs = config_dict["hyperparameters"]["T_obs"]
-            self.T_pred = config_dict["hyperparameters"]["T_pred"]
-            self.min_n = config_dict["hyperparameters"]["min_N_agents"]
-            self.agent_classes = config_dict["hyperparameters"]["agent_types"]
-            self.other_agents = config_dict["hyperparameters"]["other_agents"]
-
-            # the lookuptable is a dataframe separate from the dataframe containing all trajectory data.
-            # each row fully describes a complete training instance,
-            # with its corresponding video/scene name, and timestep.
-            self.lookuptable = pd.DataFrame(columns=["scene", "video", "timestep", "targets", "others"])
-
-            frames = []
-
-            # read the csv's for all videos
-            # hopefully it is manageable within memory
-            for scene_name in os.scandir(os.path.join(self.root, "annotations")):
-                for video_name in os.scandir(os.path.realpath(scene_name)):
-                    # scene_key = f"{scene_name.name}/{video_name.name}"
-                    annot_file_path = os.path.join(os.path.realpath(video_name), "annotations.txt")
-                    print(f"Processing: {annot_file_path}")
-                    assert os.path.exists(annot_file_path)
-                    annot_df = sdd_data_processing.pd_df_from(annotation_filepath=annot_file_path)
-
-                    # perform preprocessing steps
-                    if self.other_agents == "OUT":
-                        annot_df = annot_df[annot_df["label"].isin(self.agent_classes)]
-                    annot_df = sdd_data_processing.perform_preprocessing_pipeline(annot_df=annot_df,
-                                                                                  target_fps=self.fps,
-                                                                                  orig_fps=self.orig_fps)
-
-                    timesteps = sorted(annot_df["frame"].unique())
-
-                    # We are interested in time windows of [-T_obs : T_pred].
-                    # But only windows which contain at least one agent for us to be able to predict,
-                    # otherwise the training instance is useless.
-                    for t_idx, timestep in enumerate(timesteps[:-(self.T_obs + self.T_pred)]):
-                        window = np.array(timesteps[t_idx: t_idx + self.T_obs + self.T_pred])
-                        # print(idx, window)
-
-                        # some timesteps are inexistant in the dataframe, due to the absence of any annotations at those
-                        # points in time. we check that we can have a complete window.
-                        # (note that while a complete window means we have at least one observation for each timestep,
-                        # some agents might not have all their timesteps observed)
-                        window_is_complete = (window[:-1] + int(self.orig_fps//self.fps) == window[1:]).all()
-
-                        if window_is_complete:
-                            mini_df = annot_df[annot_df["frame"].isin(window)]
-                            all_present_agents = mini_df["Id"].unique()
-                            candidate_target_agents = mini_df[mini_df["label"].isin(self.agent_classes)]["Id"].unique()
-
-                            # we are only interested in windows with at least 1 fully described trajectory, that is,
-                            # with at least one agent who's observed at all timesteps in the window
-                            target_agents = [agent_id for agent_id in candidate_target_agents if
-                                             (mini_df["Id"].values == agent_id).sum() == self.T_obs + self.T_pred]
-                            other_agents = [agent_id for agent_id in all_present_agents if
-                                              agent_id not in target_agents]
-
-                            if len(target_agents) >= self.min_n:
-                                self.lookuptable.loc[len(self.lookuptable)] = {
-                                    "scene": scene_name.name,
-                                    "video": video_name.name,
-                                    "timestep": timestep,
-                                    "targets": target_agents,
-                                    "others": other_agents
-                                }
-
-                    annot_df.insert(0, "scene", scene_name.name, False)
-                    annot_df.insert(1, "video", video_name.name, False)
-
-                    frames.append(annot_df)
-                    # scene_keys.append(scene_key)
-
-            self.lookuptable.set_index(["scene", "video", "timestep"], inplace=True)
-            self.lookuptable.sort_index(inplace=True)
-            self.frames = pd.concat(frames)
-            self.frames.set_index(["scene", "video"], inplace=True)
-            self.frames.sort_index(inplace=True)
-
-            # generate unique file name for our saved pickle and json files
-            self.pickle_id = str(uuid.uuid4())
-            self.dataset_path = os.path.join(datasets_path, self.pickle_id)
-            self.save_data()
+        self.frames, self.lookuptable = self.load_data(pickle_path)
 
         # subsetting the data from the splits we are interested in
         if self.split is not None:
@@ -236,31 +139,9 @@ class StanfordDroneDataset(Dataset):
         }
         return metadata_dict
 
-    def save_data(self):
-        """
-        saves 'self.frames' and 'self.lookuptable' into a pickle file, and the corresponding parameters as a json
-        :return: None
-        """
-        # create dataset directory
-        assert not os.path.exists(self.dataset_path), f"ERROR: dataset path already exists:\n{self.dataset_path}"
-        os.mkdir(self.dataset_path)
-
-        # save lookuptable and frames to a pickle
-        with open(os.path.join(self.dataset_path, f"dataset.pickle"), "wb") as f:
-            pickle.dump((self.frames, self.lookuptable), f)
-
-        # save metadata as a json with same file name as pickle file
-        with open(os.path.join(self.dataset_path, f"dataset_parameters.json"), "w", encoding="utf8") as f:
-            json.dump(self.metadata_dict(), f, indent=4)
-
     @staticmethod
     def load_data(filepath: str):
-        """
-        reads the pickle file with name 'filepath',
-        and assigns corresponding values to 'self.frames' and 'self.lookuptable'
-        :param filepath: the path of the pickle file to read from
-        :return: None
-        """
+        """ reads the pickle file with name 'filepath', """
         with open(os.path.join(filepath), "rb") as f:
             return pickle.load(f)
 
