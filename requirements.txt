@@ -2,7 +2,7 @@ shapely
 matplotlib
 numpy
 scipy
-pandas
+pandas<2.0.0
 tqdm
 opencv-python
 pyyaml
