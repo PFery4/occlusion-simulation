@@ -21,6 +21,7 @@ rng.shuffle(SCENE_SPLIT)
 
 
 def get_config(config_filename) -> dict:
+    # TODO: change input to os.path object instead of str.
     """
     reads the config file '{config_filename}.yaml' that is inside the 'config' directory.
     :return: the contents of the config file, as a dict
