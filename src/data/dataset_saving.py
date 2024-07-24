@@ -14,13 +14,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg', type=str, default=None, required=True,
                         help='name of the .yaml config file to use,')
-    parser.add_argument('--dirname', type=str, default=None, required=False,
+    parser.add_argument('--dir-name', type=str, default=None, required=False,
                         help='name of the directory to save processed dataset.')
     args = parser.parse_args()
 
-    if args.dirname is None:
+    if args.dir_name is None:
         generated_name = str(uuid.uuid4())
-        args.dirname = generated_name
+        args.dir_name = generated_name
         print(f"No directory name provided for the target, generating a random name instead:\n{generated_name}\n")
 
     config_dict = config.get_config(args.cfg)
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     # generating a unique directory name for saving our dataset and metadata files
     save_path = os.path.abspath(os.path.join(config.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
-    save_dir = os.path.join(save_path, args.dirname)
+    save_dir = os.path.join(save_path, args.dir_name)
     assert not os.path.exists(save_dir), f"ERROR: target directory already exists:\n{save_dir}"
     print(f"Target directory:\n{save_dir}\n\n")
 
