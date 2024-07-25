@@ -2,22 +2,11 @@
 .*
 !/.gitignore
 
-# ignore all config files, except the default one
-config/*
-!/config/default_config.yaml
-
 # ignore all __pycache__ directories
 **/__pycache__
 
-# ignore simulation outputs
+# ignore outputs directory
 outputs
-
-# ignore pickled dataloaders
-data/pickled_dataloaders
 
 # ignore all eventual log files
 **/*.log
-
-# ignore delftblue folder (only useful for people who can access the DHPC)
-delftblue
-
