@@ -5,6 +5,7 @@ from random import Random
 
 # the directory to the root of the repository
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
+SDD_CONFIG = 'SDD_dataset_config'   # name of the config file that points to the root of the unprocessed SDD directory.
 
 # homography data: for each scene, we measure a distance in pixel space and real physical space.
 # We make use of landmarks present in the scene to obtain corresponding measurements in image and real space.
