@@ -13,12 +13,13 @@ from typing import Dict, Optional
 
 class StanfordDroneDataset(Dataset):
 
-    def __init__(self, config_dict: Dict, split: Optional[str] = None):
+    SDD_root = conf.get_config(conf.SDD_CONFIG)["path"]
+
+    def __init__(self, config: Dict, split: Optional[str] = None):
         assert split in ('train', 'val', 'test') or split is None
-        self.root = config_dict["dataset"]["path"]
-        saved_datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+        saved_datasets_path = os.path.abspath(os.path.join(conf.REPO_ROOT, 'outputs', 'pickled_dataloaders'))
         assert os.path.exists(saved_datasets_path), f"ERROR: saved datasets path does not exist:\n{saved_datasets_path}"
-        self.pickle_id = config_dict["dataset"]["pickle_id"]
+        self.pickle_id = config["pickle_id"]
         self.split = split
 
         self.coord_conv = conf.COORD_CONV
@@ -60,7 +61,7 @@ class StanfordDroneDataset(Dataset):
         scene, video, timestep = lookup.name
 
         # extract the reference image
-        image_path = os.path.join(self.root, "annotations", scene, video, "reference.jpg")
+        image_path = os.path.join(self.SDD_root, "annotations", scene, video, "reference.jpg")
         assert os.path.exists(image_path)
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)      # np.array [H, W, C]
@@ -147,13 +148,13 @@ class StanfordDroneDataset(Dataset):
 
 
 class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
-    def __init__(self, config_dict: Dict, split: Optional[str] = None):
-        super().__init__(config_dict=config_dict, split=split)
+    def __init__(self, config: Dict, split: Optional[str] = None):
+        super().__init__(config=config, split=split)
 
         assert os.path.exists(self.dataset_path), f"ERROR: Path does not exist: {self.dataset_path}"
         print(f"Extracting simulation pickle files from:\n{self.dataset_path}")
 
-        sim_ids = config_dict["occlusion_dataset"]["sim_ids"]
+        sim_ids = config["sim_ids"]
         n_trials = []
         occlusion_tables = []
 
@@ -263,11 +264,17 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import time
     import src.visualization.sdd_visualize as sdd_visualize
+    import argparse
 
-    config = conf.get_config("config")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cfg', type=str, required=True,
+                        help='name of the .yaml config file to use for instantiating the dataset.')
+    args = parser.parse_args()
+
+    config = conf.get_config(args.cfg)
 
     # dataset = StanfordDroneDataset(config_dict=config, split='train')
-    dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config, split=None)
+    dataset = StanfordDroneDatasetWithOcclusionSim(config=config, split=None)
     print(f"{len(dataset)=}")
 
     # print(f"{dataset.__class__}.__getitem__() dictionary keys:")
