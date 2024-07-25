@@ -41,6 +41,13 @@ Though installation through other methods might be possible, only the following 
    ```
    export PYTHONPATH=$PWD
    ```
+   
+### Coordinates Conversion File
+
+1. Create the coordinates conversion `.txt` file inside the [config](config) directory by running the [src/data/save_coord_conv_file.py](src/data/save_coord_conv_file.py) script:
+   ```
+   python src/data/save_coord_conv_file.py
+   ```
 
 ## Dataset Processing
 
