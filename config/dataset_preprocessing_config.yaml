@@ -1,0 +1,8 @@
+# This config file provides parameter values for the preprocessing of the Stanford Drone Dataset.
+
+T_obs: 8                                          # [-] size of observation window  [-T_obs+1 : 0]
+T_pred: 12                                        # [-] prediction horizon          [1 : T_pred]
+fps: 2.5                                          # [s^-1] trajectory sampling fps.
+agent_types: ["Pedestrian", "Biker", "Skater"]    # select from ["Pedestrian", "Biker", "Skater", "Car", "Bus", "Cart"]. Types of agent we are keeping in the processed dataset.
+other_agents: "OUT"                               # can be either "IN" or "OUT". Defines whether the agent belonging to classes outside the selected "agent_types" are kept as eventual providers of social context for the prediction ("IN"), or whether they are completely removed from the dataset in preprocessing, resulting in the model disregarding those agents entirely ("OUT").
+min_N_agents: 1                                   # [-] minimum number of fully observed agents for a candidate instance window to be made part of the dataset.
