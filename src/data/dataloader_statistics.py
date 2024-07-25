@@ -1,42 +1,22 @@
-import os.path
-
+import argparse
+import matplotlib.pyplot as plt
 import numpy as np
+import os.path
 import pandas as pd
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 import src.data.config as conf
 import src.data.sdd_dataloader as sdd_dataloader
-import src.visualization.sdd_visualize as sdd_visualize
-
-def get_summary_n_agents_per_video() -> None:
-    config = conf.get_config("config")
-    dataset = sdd_dataloader.StanfordDroneDataset(config_dict=config)
-
-    print(f"{dataset.lookuptable=}")
-
-    lookuptable = dataset.lookuptable
-
-    for scene in lookuptable.index.get_level_values('scene').unique():
-        scene_df = lookuptable.loc[scene]
-        # print(f"{len(scene_df)=}")
-        # print(f"{scene_df=}")
-        for video in scene_df.index.get_level_values('video').unique():
-            video_df = scene_df.loc[video]
-            instances_n_agents = []
-            for index, instance in video_df.iterrows():
-                # print(f"{instance['targets']=}")
-                instances_n_agents.append(len(instance["targets"]))
-            print(f"{scene, video, len(video_df), np.mean(instances_n_agents), np.std(instances_n_agents)=}")
 
 
-def get_greatest_distance_m():
-    stop_at = -10
-    save = True
-    show = not save
+def get_greatest_distance_m(
+        dataset_cfg: str,
+        save: bool,
+        show: bool
+):
 
-    config = conf.get_config("config")
-    dataset = sdd_dataloader.StanfordDroneDataset(config_dict=config)
+    config = conf.get_config(dataset_cfg)
+    dataset = sdd_dataloader.StanfordDroneDataset(config=config)
 
     distance_df = pd.DataFrame(
         columns=[
@@ -46,11 +26,8 @@ def get_greatest_distance_m():
     )
 
     for instance_idx in tqdm(range(len(dataset))):
-        # print(f"{instance_idx=}")
-        # print(f"{dataset.__getitem__(instance_idx)=}")
         instance_dict = dataset.__getitem__(instance_idx)
 
-        # agent_positions = np.empty([3 * len(instance_dict['agents']), 2])
         ps_obs = np.empty([len(instance_dict['agents']), 2])
         ps_zero = np.empty([len(instance_dict['agents']), 2])
         ps_pred = np.empty([len(instance_dict['agents']), 2])
@@ -67,16 +44,8 @@ def get_greatest_distance_m():
         mean_zero = np.mean(ps_zero, axis=0)[np.newaxis, :]
         positions = np.concatenate([ps_obs, ps_zero, ps_pred], axis=0)
 
-        # print(f"{ps_obs, ps_obs.shape=}")
-        # print(f"{ps_zero, ps_zero.shape=}")
-        # print(f"{ps_pred, ps_pred.shape=}")
-        # print(f"{mean_zero, mean_zero.shape=}")
-        # print(f"{positions, positions.shape=}")
-
         diff_mean_zero = np.abs(positions - mean_zero)
         diff_matrix = np.abs(positions[:, np.newaxis] - positions)
-        # print(f"{diff_mean_zero, diff_mean_zero.shape=}")
-        # print(f"{diff_matrix, diff_matrix.shape=}")
 
         dist_mean_zero = np.linalg.norm(diff_mean_zero, axis=1)
         dist_matrix = np.linalg.norm(diff_matrix, axis=2)
@@ -84,26 +53,16 @@ def get_greatest_distance_m():
         dists = dist_matrix[np.nonzero(dist_matrix)]
         if not np.any(dists):
             dists = np.array([0.0])
-        # print(f"{dist_mean_zero, dist_mean_zero.shape=}")
-        # print(f"{dist_matrix, dist_matrix.shape=}")
-        # print(f"{dists=}")
 
         distance_df.loc[len(distance_df)] = [
             instance_idx, instance_dict['scene'], instance_dict['video'], instance_dict['timestep'],
             len(instance_dict['agents']), np.max(dists), np.mean(dists), np.max(dist_mean_zero), np.mean(dist_mean_zero)
         ]
 
-        if instance_idx == stop_at:
-            print(f"broke because: {instance_idx=}")
-            break
-
     distance_df['px_ref'] = np.NAN
     distance_df['m_ref'] = np.NAN
 
     for index, row in tqdm(distance_df.iterrows()):
-        # print(f"{index=}")
-        # print(f"{row['scene'], row['video']=}")
-        # print(f"{conf.COORD_CONV.loc[row['scene'], row['video']]['px']=}")
         distance_df.loc[index, 'm/px'] = conf.COORD_CONV.loc[row['scene'], row['video']]['m/px']
 
     distance_df['max_dist_inter_agent_m'] = distance_df['max_dist_inter_agent_px'] * distance_df['m/px']
@@ -111,11 +70,8 @@ def get_greatest_distance_m():
     distance_df['max_dist_mean_zero_m'] = distance_df['max_dist_mean_zero_px'] * distance_df['m/px']
     distance_df['mean_dist_mean_zero_m'] = distance_df['mean_dist_mean_zero_px'] * distance_df['m/px']
 
-    # print(f"{distance_df=}")
     row_max_dist_inter_agent = distance_df['max_dist_inter_agent_m'].idxmax()
     row_max_dist_mean_zero = distance_df['max_dist_mean_zero_m'].idxmax()
-    # print(f"{row_max_dist_inter_agent=}")
-    # print(f"{row_max_dist_mean_zero=}")
 
     summarystr = f"Maximum inter-agent distance in dataset:\n"\
                  f"dataset index: {distance_df.iloc[row_max_dist_inter_agent]['idx']}\n"\
@@ -172,17 +128,13 @@ def get_greatest_distance_m():
     ax[1, 3].set_ylabel('Max distance to avg. position at t0 [m]')
 
     plt.subplots_adjust(left=0.1, bottom=0.1, right=0.94, top=0.94, wspace=0.28, hspace=0.2)
-    # plt.subplot_tool()
 
     if save:
-        save_path = os.path.join(conf.REPO_ROOT, config['results']['fig_path'], 'distances')
+        save_path = os.path.join(conf.REPO_ROOT, 'outputs', 'figures', 'distances')
         if not os.path.exists(save_path):
             os.makedirs(save_path)
         assert os.path.exists(save_path)
         print(f"saving figure of distances to:\n{save_path}")
-        # print(plt.get_backend())
-        # manager = plt.get_current_fig_manager()
-        # manager.resize(*manager.window.maxsize())
         fig.set_size_inches(20, 12)
         plt.savefig(os.path.join(save_path, 'distances_figure.png'), bbox_inches='tight', dpi=100)
         with open(os.path.join(save_path, 'distances_summary.txt'), 'w') as txt_file:
@@ -191,43 +143,21 @@ def get_greatest_distance_m():
     if show:
         plt.show()
 
-    # idx_ = distance_df.iloc[row_max_dist]['idx']
-    # print(f"{idx_=}")
-    # instance = dataset.__getitem__(idx_)
-    # print(instance)
-    # fig, ax = plt.subplots()
-    # sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance)
-    # plt.show()
-
-
-def make_coord_conversion_dataframe():
-    file_dir = os.path.join(conf.REPO_ROOT, 'config')
-    file_path = os.path.join(file_dir, 'pixel_to_meter.txt')
-    px_per_m_df = pd.read_csv(
-        file_path, sep=', ', engine='python'
-    )
-
-    px_per_m_df['px/m'] = px_per_m_df['px'] / px_per_m_df['m']
-    px_per_m_df['m/px'] = px_per_m_df['m'] / px_per_m_df['px']
-
-    print(f"{px_per_m_df=}")
-
-    new_file_path = os.path.join(file_dir, 'coordinates_conversion.txt')
-    px_per_m_df.to_csv(new_file_path, sep=';', index=False)
-
-
-def show_coord_convs():
-    fig, ax = plt.subplots()
-    ax.scatter(conf.COORD_CONV['m'], conf.COORD_CONV['px'])
-    ax.set_xlabel('[m]')
-    ax.set_ylabel('[px]')
-    ax.set_title('SDD: [px] vs. [m]')
-    plt.show()
-
 
 if __name__ == '__main__':
-    print("Hello!")
-    # get_summary_n_agents_per_video()
-    # make_coord_conversion_dataframe()
-    # show_coord_convs()
-    get_greatest_distance_m()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset-cfg', type=str, required=True,
+                        help='name of the .yaml config file to use for the parameters of the base SDD dataset.')
+    parser.add_argument('--show', action='store_true', default=False,
+                        help='whether to display this script\'s output on the screen.')
+    parser.add_argument('--save', action='store_true', default=False,
+                        help='whether to save this script\'s output as a png file.')
+    args = parser.parse_args()
+
+    assert args.save or args.show, "Please select at least one option from --save / --show."
+
+    get_greatest_distance_m(
+        dataset_cfg=args.dataset_cfg,
+        save=args.save,
+        show=args.show
+    )
