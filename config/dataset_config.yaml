@@ -1,0 +1,7 @@
+# This config file provides parameter values for the instantiation of the Occlusion Dataset.
+
+pickle_id: "ce4ae1bc-5369-464c-9556-3b33a0178f98"     # the name of the folder from which to load the base, preprocessed dataset.
+sim_ids:
+  - "v3_161803399"
+  - "v3_271828183"
+  - "v3_314159265"
