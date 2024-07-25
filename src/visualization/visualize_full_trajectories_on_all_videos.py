@@ -8,7 +8,7 @@ from src.data import sdd_data_processing
 from src.visualization.sdd_visualize import draw_all_trajectories_onto_image
 
 
-def visualize_full_trajectories_on_all_scenes(preprocessing_cfg: str):
+def visualize_full_trajectories_on_all_videos(preprocessing_cfg: str):
 
     sdd_config = conf.get_config(conf.SDD_CONFIG)
     config_dict = conf.get_config(preprocessing_cfg)
@@ -64,4 +64,4 @@ if __name__ == '__main__':
                         help='name of the .yaml config file to use for the parameters of the preprocessing.')
     args = parser.parse_args()
 
-    visualize_full_trajectories_on_all_scenes(preprocessing_cfg=args.preprocessing_cfg)
+    visualize_full_trajectories_on_all_videos(preprocessing_cfg=args.preprocessing_cfg)
