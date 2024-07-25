@@ -12,8 +12,8 @@ from src.data import sdd_data_processing
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default=None, required=True,
-                        help='name of the .yaml config file to use,')
+    parser.add_argument('--preprocessing-cfg', type=str, required=True,
+                        help='name of the .yaml config file to use for the parameters of the preprocessing.')
     parser.add_argument('--dir-name', type=str, default=None, required=False,
                         help='name of the directory to save processed dataset.')
     args = parser.parse_args()
@@ -23,27 +23,28 @@ if __name__ == '__main__':
         args.dir_name = generated_name
         print(f"No directory name provided for the target, generating a random name instead:\n{generated_name}\n")
 
-    config_dict = config.get_config(args.cfg)
+    dataset_config = config.get_config(config.SDD_CONFIG)
+    preprocessing_config = config.get_config(args.preprocessing_cfg)
 
     print("Performing Preprocessing and Saving of Dataset.\n\n")
 
-    dataset_path = config_dict["dataset"]["path"]
+    dataset_path = dataset_config["path"]
     assert os.path.exists(dataset_path), f"ERROR: dataset path does not exist:\n{dataset_path}"
     print(f"Source dataset path:\n{dataset_path}\n")
 
     # generating a unique directory name for saving our dataset and metadata files
-    save_path = os.path.abspath(os.path.join(config.REPO_ROOT, config_dict["dataset"]["pickle_path"]))
+    save_path = os.path.abspath(os.path.join(config.REPO_ROOT, 'outputs', 'pickled_dataloaders'))
     save_dir = os.path.join(save_path, args.dir_name)
     assert not os.path.exists(save_dir), f"ERROR: target directory already exists:\n{save_dir}"
     print(f"Target directory:\n{save_dir}\n\n")
 
-    original_fps = config_dict["dataset"]["fps"]
-    fps = config_dict["hyperparameters"]["fps"]
-    T_obs = config_dict["hyperparameters"]["T_obs"]
-    T_pred = config_dict["hyperparameters"]["T_pred"]
-    min_n_agents = config_dict["hyperparameters"]["min_N_agents"]
-    agent_classes = config_dict["hyperparameters"]["agent_types"]
-    other_agents = config_dict["hyperparameters"]["other_agents"]
+    original_fps = dataset_config["fps"]
+    fps = preprocessing_config["fps"]
+    T_obs = preprocessing_config["T_obs"]
+    T_pred = preprocessing_config["T_pred"]
+    min_n_agents = preprocessing_config["min_N_agents"]
+    agent_classes = preprocessing_config["agent_types"]
+    other_agents = preprocessing_config["other_agents"]
 
     # the lookuptable is a dataframe separate from the dataframe containing all trajectory data.
     # each row fully describes a complete training instance,
