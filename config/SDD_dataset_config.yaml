@@ -1,0 +1,4 @@
+# This config file provides necessary parameters for the interface between the code and the Stanford Drone Dataset.
+
+path: <path/to/sdd_dataset>                           # the path points to the root of the dataset (i.e., where the 'annotations' directory and the README are located)
+fps: 30                                               # frequency of annotation (SDD dataset = 30Hz)
