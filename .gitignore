@@ -10,3 +10,6 @@ outputs
 
 # ignore all eventual log files
 **/*.log
+
+# ignore config/coordinate_conversions.txt file
+config/coordinates_conversion.txt
