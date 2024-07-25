@@ -1,15 +1,17 @@
 import matplotlib.pyplot as plt
 import matplotlib.axes
 import skgeom as sg
+import logging
 import numpy as np
 from typing import List
-import src.visualization.sdd_visualize as sdd_visualize
-from src.data.sdd_dataloader import StanfordDroneDataset, StanfordDroneDatasetWithOcclusionSim
+from src.data.sdd_dataloader import StanfordDroneDataset
 from src.occlusion_simulation.simple_occlusion import simulate_occlusions
+from src.visualization import sdd_visualize
 from src.visualization.plot_utils import plot_sg_polygon
 
 EGO_COLOR = "#DC3220"
 OCCLUDER_COLOR = "#005AB5"
+
 
 def plot_simulation_step_1(
         ax: matplotlib.axes.Axes,
@@ -212,8 +214,6 @@ def visualize_random_simulation_samples(
         nrows: int = 2,
         ncols: int = 2
 ) -> None:
-    import logging
-
     # logging to standard out
     logger = logging.getLogger(__name__)
     c_handler = logging.StreamHandler()
@@ -278,146 +278,3 @@ def visualize_random_simulation_samples(
             )
 
     plt.show()
-
-
-def show_simulation():
-    import src.data.config as conf
-    import src.visualization.sdd_visualize as sdd_visualize
-
-    config = conf.get_config("config")
-    dataset = StanfordDroneDataset(config_dict=config)
-
-    # showing the simulation process of some desired instance
-    instance_idx = 7592     # coupa video0 60
-    # instance_idx = 36371    # nexus video7 3024
-    # instance_idx = np.random.randint(len(dataset))
-    print(f"dataset.__getitem__({instance_idx})")
-    instance_dict = dataset.__getitem__(instance_idx)
-
-    fig, ax = plt.subplots()
-    sdd_visualize.draw_map_numpy(draw_ax=ax, scene_image=instance_dict["scene_image"])
-    sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict)
-
-    # time_polygon_generation(instance_dict=instance_dict, n_iterations=100000)
-    sim_params = config["occlusion_simulator"]
-    img = instance_dict["scene_image"]
-    agents = instance_dict["agents"]
-    past_window = instance_dict["past_window"]
-    future_window = instance_dict["future_window"]
-
-    simulation_outputs = simulate_occlusions(
-        config=sim_params,
-        image_res=tuple(img.shape[:2]),
-        agents=agents,
-        past_window=past_window,
-        future_window=future_window
-    )
-    visualize_occlusion_simulation(instance_dict, simulation_outputs)
-
-    # Showing the simulation outputs of some random instances
-    visualize_random_simulation_samples(dataset, config["occlusion_simulator"], 2, 2)
-
-
-def save_simulation_cases():
-    import os
-    import logging
-    import src.data.config as conf
-    import src.visualization.sdd_visualize as sdd_visualize
-    from tqdm import tqdm
-
-    logger = logging.getLogger(__name__)
-    c_handler = logging.StreamHandler()
-    logger.addHandler(c_handler)
-
-    n_examples = 100
-    clear_figure_folder = True
-    use_sim_data = True         # If False, will run the simulation on a regular version of the dataset, without occlusion cases
-
-    config = conf.get_config("config")
-    if use_sim_data:
-        dataset = StanfordDroneDatasetWithOcclusionSim(config_dict=config)
-    else:
-        dataset = StanfordDroneDataset(config_dict=config)
-
-    # defining path and creating it if it does not exit
-    save_path = os.path.join(conf.REPO_ROOT, config['results']['fig_path'], 'simulation_examples')
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    # clearing figures
-    if clear_figure_folder:
-        for item in os.listdir(save_path):
-            if item.endswith(".png"):
-                print(f"Removing: {item}")
-                os.remove(os.path.join(save_path, item))
-
-    # sampling instances
-    instance_indices = np.sort(np.random.choice(len(dataset), size=n_examples, replace=False))
-    print(f"{instance_indices=}")
-
-    # setting up error counter
-    err_count = 0
-
-    for idx in tqdm(instance_indices):
-        gs_kw = dict(wspace=0.0, hspace=0.0)
-        fig, ax = plt.subplots(gridspec_kw=gs_kw)
-        instance_dict = dataset.__getitem__(idx)
-
-        sdd_visualize.visualize_training_instance(draw_ax=ax, instance_dict=instance_dict, lgnd=False)
-
-        if not use_sim_data:
-
-            img = instance_dict["scene_image"]
-            agents = instance_dict["agents"]
-            past_window = instance_dict["past_window"]
-            future_window = instance_dict["future_window"]
-
-            try:
-                simulation_dict = simulate_occlusions(
-                    config=config["occlusion_simulator"],
-                    image_res=tuple(img.shape[:2]),
-                    agents=agents,
-                    past_window=past_window,
-                    future_window=future_window
-                )
-
-                occlusion_target_coords = simulation_dict["occlusion_target_coords"]
-                ego_point = simulation_dict["ego_point"]
-                occluders = simulation_dict["occluders"]
-                occluded_regions = simulation_dict["occluded_regions"]
-
-                # visualization part
-                p_occls = [coords[0] for coords in occlusion_target_coords]
-                p_disoccls = [coords[1] for coords in occlusion_target_coords]
-                p1s = [occluder[0] for occluder in occluders]
-                p2s = [occluder[1] for occluder in occluders]
-
-                plot_simulation_step_6(
-                    ax=ax,
-                    p_occls=p_occls,
-                    p_disoccls=p_disoccls,
-                    ego_point=ego_point,
-                    p1s=p1s,
-                    p2s=p2s,
-                    occluded_regions=occluded_regions
-                )
-
-            except Exception as ex:
-                err_count += 1
-                logger.exception("\n\nSimulation Failed:\n")
-                ax.text(
-                    sum(ax.get_xlim())/2, sum(ax.get_ylim())/2, "FAILED",
-                    fontsize=20, c="red", horizontalalignment="center", verticalalignment="center"
-                )
-
-        ax.set_title(idx)
-
-        img_path = os.path.join(save_path, f"example_{idx}.png")
-        plt.savefig(fname=img_path, format='png', bbox_inches='tight', pad_inches=0)
-
-    print(f"TOTAL AMOUNT OF ERRORS: {err_count} / {n_examples}")
-
-
-if __name__ == '__main__':
-    show_simulation()
-    # save_simulation_cases()
