@@ -29,3 +29,26 @@ Though installation through other methods might be possible, only the following 
    ```
    pip install -r requirements.txt
    ```
+
+### Stanford Drone Dataset
+
+1. Download the [Stanford Drone Dataset](https://cvgl.stanford.edu/projects/uav_data/) and extract its contents anywhere on your system.
+2. Inside the [config/SDD_dataset_config.yaml](config/SDD_dataset_config.yaml) file, fill the `path` entry with the root directory of your extracted Stanford Drone Dataset (i.e., the directory where the dataset's README and the annotation directory are located).
+
+### Environment Variables
+
+1. Add this directory to the PYTHONPATH environment variable:
+   ```
+   export PYTHONPATH=$PWD
+   ```
+
+## Dataset Processing
+
+### Preprocessing
+
+Before running the simulator, the dataset must first be preprocessed (the preprocessing involves subsampling of measurements to a desired frequency, removal of undesirable trajectories and selection of desired agent classes).
+The preprocessing of the dataset can be parametrized using the [config/dataset_preprocessing_config.yaml](config/dataset_preprocessing_config.yaml) file. Feel free to adapt the parameters to your liking. When ready, you can run the preprocessing of the dataset by running the [src/data/dataset_saving.py](src/data/dataset_saving.py) script, with the following command:
+```
+python src/data/dataset_saving.py --preprocessing-cfg dataset_preprocessing_config --dir-name SDD_base
+```
+This will create a directory `outputs/pickled_dataloaders/SDD_base`, where the preprocessed dataset will be stored.
