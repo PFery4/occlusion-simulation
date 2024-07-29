@@ -1,5 +1,4 @@
 import argparse
-import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as sp
 import skgeom as sg
@@ -140,14 +139,6 @@ def simulate_occlusions(
             time_window=full_window[:-1],
             boundary=scene_boundary
         )
-        # targets_fullobs_regions = instantaneous_visibility_polygons(
-        #     agents=agents,
-        #     target_agent_indices=target_agent_indices,
-        #     agent_radius=r_agents,
-        #     interp_dt=1,
-        #     time_window=past_window,
-        #     boundary=scene_boundary
-        # )
 
         # reducing into a single sg.PolygonSet
         targets_fullobs_regions = functools.reduce(
@@ -184,18 +175,6 @@ def simulate_occlusions(
     simulation_dict["targets_fullobs_regions"] = targets_fullobs_regions
     simulation_dict["yes_ego_triangles"] = yes_ego_triangles
 
-    # # generate occlusion windows -> List[Tuple[int, int]]
-    # # each item provides two timesteps for each target agent:
-    # # - the first one corresponds to the last observed timestep before occlusion
-    # # - the second one corresponds to the first re-observed timestep before reappearance
-    # occlusion_windows = [agent_op.generate_occlusion_timesteps(
-    #     agent=agents[idx],
-    #     past_window=past_window,
-    #     future_window=future_window_plus_one,
-    #     min_obs=min_obs, min_reobs=min_reobs, min_occl=min_occl
-    # ) for idx in target_agent_indices]
-    # simulation_dict["occlusion_windows"] = occlusion_windows
-
     # to those occlusion window timesteps, we compute the corresponding occlusion coordinates for each target agent
     occlusion_target_coords = [(agents[idx].position_at_timestep(full_window[occlusion_window[0]]),
                                 agents[idx].position_at_timestep(full_window[occlusion_window[1]]))
@@ -216,7 +195,6 @@ def simulate_occlusions(
     ego_visipoly = None
 
     while trial < 5 and not all(valid_occlusion_patterns):
-        # print(f"{trial=}")
         # produce an ego_point from yes_ego_triangles
         ego_point = poly_op.random_points_in_triangle(*poly_op.sample_triangles(yes_ego_triangles, k=1), k=1).reshape(2)
 
@@ -232,8 +210,6 @@ def simulate_occlusions(
         occluders = []
 
         for idx, occlusion_window in zip(target_agent_indices, occlusion_windows):
-            # occlusion_window = (t_occl, t_disoccl)
-
             # triangle defined by ego, and the trajectory segment [t_occl: t_occl+1] of the target agent
             p1_ego_traj_triangle = sg.Polygon(np.array(
                 [ego_point,
@@ -345,11 +321,6 @@ def runsim_on_entire_dataset(
     pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, 'outputs', 'pickled_dataloaders'))
     assert os.path.exists(pickle_path)
 
-    # if os.path.exists(os.path.join(pickle_path, dataset.pickle_id, sim_id)):
-    #     old_sim_id = sim_id
-    #     sim_id = str(uuid.uuid4())
-    #     print(f"Simulation run sim_id {old_sim_id} already exists. Instead of overwriting data, we will use another sim_id: {sim_id}")
-
     sim_folder = os.path.join(pickle_path, dataset.pickle_id, sim_id)
     assert not os.path.exists(sim_folder), f"ERROR: target directory already exists:\n{sim_folder}"
     print(f"Creating simulation directory:\n{sim_folder}")
@@ -363,9 +334,6 @@ def runsim_on_entire_dataset(
 
     # setting up the logger for traceback information of simulation failures
     logger = logging.getLogger(__name__)
-    # c_handler = logging.StreamHandler()
-    # c_handler.setLevel(logging.WARNING)
-    # logger.addHandler(c_handler)
     f_handler = logging.FileHandler(log_path, mode="a")
     f_handler.setLevel(logging.INFO)
     logger.addHandler(f_handler)
