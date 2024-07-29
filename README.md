@@ -8,7 +8,7 @@ We provide the code for our simulator, as well as the necessary functionalities 
 ## Installation / Setup
 ### Environment
 
-*We recommend to use Anaconda to host the project's environment: the project relies on the scikit-geometry library, which is directly accessible from the conda-forge channel.
+*We recommend to use Anaconda to host the project's environment: the project relies on the [scikit-geometry](https://github.com/scikit-geometry/scikit-geometry) library, which is only directly accessible from the conda-forge channel (otherwise, it can be built from source, with [CGAL 5.0](https://www.cgal.org/) installed).
 Though installation through other methods might be possible, only the following instructions have been verified to work properly.*
 
 1. Create the environment:
