@@ -1,0 +1,16 @@
+# This config file provides parameter values for the execution of the Occlusion Simulator.
+
+sim_id: "v3_42"               # desired identifier for the occlusion simulation run
+rng_seed: 42                  # [-] random number generator seed
+simulations_per_instance: 1   # [-] number of runs per SDD instance (only used when running the sim on the whole dataset)
+n_target_agents: 1            # [-] number of desired agents to occlude virtually (Keep this value at 1, increasing this number might make the simulator fail more often)
+min_obs: 3                    # [-] minimum amount of timesteps we want to have observed within observation window
+min_reobs: 0                  # [-] minimum amount of timesteps we want to be able to reobserve after disocclusion
+min_occl: 5                   # [-] minimum amount of timesteps our simulated occlusions will last
+min_travl_dist: 50            # [px] minimum distance travelled by an agent over the past window in order to be eligible for an occlusion simulation (this is done to prevent selection of idle agents)
+d_border: 4.5                 # [-] buffer distance to prevent ego-placement near scene border (expressed as % of scene image diagonal)
+d_min_occl_ag: 60             # [px] minimum distance that any point of a virtual occluder may have wrt any agent
+d_min_occl_ego: 30            # [px] minimum distance that any point of a virtual occluder may have wrt ego
+k_ag_ego_distance: 1.1        # [-] d_min_ag_ego = (d_min_occl_ego + d_min_occl_ag) * k_ag_ego_distance
+target_angle: 45              # [deg] angle for the generation of wedges to constrain ego-placement
+r_agents: 10                  # [px] estimated "width" of agents
