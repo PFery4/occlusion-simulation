@@ -74,30 +74,6 @@ class StanfordDroneDataset(Dataset):
 
         agents = [StanfordDroneAgent(scenevideo_df[scenevideo_df["Id"] == agent_id]) for agent_id in lookup["targets"]]
 
-        # TODO: maybe consider doing something with partially observed agents in the delivery of the instance_dict
-        # # extract the trajectories of partially observed agents
-        # for agent_id in lookup["present"]:
-        #     # label of the agent of interest
-        #     label = mini_df[mini_df["Id"] == agent_id].iloc[0].loc["label"]
-        #
-        #     # empty sequence
-        #     sequence = np.empty((self.T_obs + self.T_pred, 2))
-        #     sequence.fill(np.nan)
-        #
-        #     # boolean array that indicates for the agent of interest which timesteps contain an observed measurement
-        #     observed_timesteps = np.in1d(window, mini_df.loc[mini_df["Id"] == agent_id, ["frame"]].values.flatten())
-        #
-        #     # filling the trajectory sequence according to the observed_timesteps boolean array
-        #     sequence[observed_timesteps, 0] = mini_df.loc[mini_df["Id"] == agent_id, ["x"]].values.flatten()
-        #     sequence[observed_timesteps, 1] = mini_df.loc[mini_df["Id"] == agent_id, ["y"]].values.flatten()
-        #
-        #     # appending data to lists of data
-        #     agent_ids.append(agent_id)
-        #     labels.append(label)
-        #     pasts.append(torch.from_numpy(sequence[:self.T_obs, :]))
-        #     futures.append(torch.from_numpy(sequence[self.T_obs:, :]))
-        #     is_fully_observed.append(False)
-
         instance_dict = {
             "idx": idx,
             "scene": scene,
@@ -225,21 +201,6 @@ class StanfordDroneDatasetWithOcclusionSim(StanfordDroneDataset):
         instance_dict["occluders"] = occlusion_case["occluders"]
         instance_dict["target_agent_indices"] = occlusion_case["target_agent_indices"]
         instance_dict["occlusion_windows"] = occlusion_case["occlusion_windows"]
-
-        # print(f"{instance_dict.items()=}")
-
-        # ego_visipoly = visibility.compute_visibility_polygon(
-        #     ego_point=instance_dict["ego_point"],
-        #     occluders=instance_dict["occluders"],
-        #     boundary=poly_gen.default_rectangle(corner_coords=(instance_dict['scene_image'].shape[:2]))
-        # )
-        #
-        # instance_dict["full_window_occlusion_masks"] = visibility.occlusion_masks(
-        #     agents=instance_dict["agents"],
-        #     time_window=instance_dict["full_window"],
-        #     ego_visipoly=ego_visipoly
-        # )
-        # Maybe load occlusion masks here
 
         return instance_dict
 
