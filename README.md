@@ -29,6 +29,10 @@ Though installation through other methods might be possible, only the following 
    ```
    pip install -r requirements.txt
    ```
+Once the environment installation process is complete, simply activate the environment:
+```
+conda activate <environment-name>
+```
 
 ### Stanford Drone Dataset
 
@@ -37,7 +41,7 @@ Though installation through other methods might be possible, only the following 
 
 ### Environment Variables
 
-1. Add this directory to the PYTHONPATH environment variable:
+1. Add the directory containing this README.md file to the PYTHONPATH environment variable:
    ```
    export PYTHONPATH=$PWD
    ```
