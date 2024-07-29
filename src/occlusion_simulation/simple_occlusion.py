@@ -1,3 +1,4 @@
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as sp
@@ -320,8 +321,10 @@ def simulate_occlusions(
     return simulation_dict
 
 
-def runsim_on_entire_dataset() -> None:
-    import uuid
+def runsim_on_entire_dataset(
+        dataset_cfg: str,
+        simulator_cfg: str
+) -> None:
     import json
     import os.path
     import pickle
@@ -329,23 +332,26 @@ def runsim_on_entire_dataset() -> None:
     import logging
     from tqdm import tqdm
 
-    config = conf.get_config("config")
+    dataset_config = conf.get_config(dataset_cfg)
+    simulator_config = conf.get_config(simulator_cfg)
 
     # setting the random seed (for reproducibility)
-    np.random.seed(config["occlusion_simulator"]["rng_seed"])
+    np.random.seed(simulator_config["rng_seed"])
 
-    dataset = StanfordDroneDataset(config_dict=config, split=None)
-    sim_id = config['occlusion_simulator']['sim_id']
+    dataset = StanfordDroneDataset(config=dataset_config, split=None)
+    sim_id = simulator_config['sim_id']
 
     # preparing the directory for saving simulation outputs
-    pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, config["dataset"]["pickle_path"]))
+    pickle_path = os.path.abspath(os.path.join(conf.REPO_ROOT, 'outputs', 'pickled_dataloaders'))
+    assert os.path.exists(pickle_path)
 
-    if os.path.exists(os.path.join(pickle_path, dataset.pickle_id, sim_id)):
-        old_sim_id = sim_id
-        sim_id = str(uuid.uuid4())
-        print(f"Simulation run sim_id {old_sim_id} already exists. Instead of overwriting data, we will use another sim_id: {sim_id}")
+    # if os.path.exists(os.path.join(pickle_path, dataset.pickle_id, sim_id)):
+    #     old_sim_id = sim_id
+    #     sim_id = str(uuid.uuid4())
+    #     print(f"Simulation run sim_id {old_sim_id} already exists. Instead of overwriting data, we will use another sim_id: {sim_id}")
 
     sim_folder = os.path.join(pickle_path, dataset.pickle_id, sim_id)
+    assert not os.path.exists(sim_folder), f"ERROR: target directory already exists:\n{sim_folder}"
     print(f"Creating simulation directory:\n{sim_folder}")
     os.makedirs(sim_folder)
     assert os.path.exists(sim_folder)
@@ -366,9 +372,9 @@ def runsim_on_entire_dataset() -> None:
 
     print(f"Saving simulation config to:\n{json_path}")
     with open(json_path, "w", encoding="utf8") as f:
-        json.dump(config["occlusion_simulator"], f, indent=4)
+        json.dump(simulator_config, f, indent=4)
 
-    n_sim_per_instance = config["occlusion_simulator"]["simulations_per_instance"]
+    n_sim_per_instance = simulator_config["simulations_per_instance"]
     n_instances = len(dataset)
     print(f"\nRunning Simulator {n_sim_per_instance} times over {n_instances} individual instances\n")
     occlusion_df = pd.DataFrame(
@@ -395,7 +401,7 @@ def runsim_on_entire_dataset() -> None:
         for trial in range(n_sim_per_instance):
             try:
                 simdict = simulate_occlusions(
-                    config=config["occlusion_simulator"],
+                    config=simulator_config,
                     image_res=tuple(img.shape[:2]),
                     agents=agents,
                     past_window=past_window,
@@ -480,4 +486,14 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
 
 if __name__ == '__main__':
-    runsim_on_entire_dataset()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset-cfg', type=str, required=True,
+                        help='name of the .yaml config file to use for the parameters of the base SDD dataset.')
+    parser.add_argument('--simulator-cfg', type=str, required=True,
+                        help='name of the .yaml config file to use for the parameters of occlusion simulator.')
+    args = parser.parse_args()
+
+    runsim_on_entire_dataset(
+        dataset_cfg=args.dataset_cfg,
+        simulator_cfg=args.simulator_cfg
+    )
