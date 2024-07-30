@@ -6,7 +6,7 @@
 **/__pycache__
 
 # ignore outputs directory
-outputs
+outputs/*
 !/outputs/pickled_dataloaders/processed_sdd
 
 # ignore all eventual log files
