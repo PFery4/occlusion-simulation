@@ -37,7 +37,7 @@ conda activate <environment-name>
 ### Stanford Drone Dataset
 
 1. Download the [Stanford Drone Dataset](https://cvgl.stanford.edu/projects/uav_data/) and extract its contents anywhere on your system.
-2. Inside the [config/SDD_dataset_config.yaml](config/SDD_dataset_config.yaml) file, fill the `path` entry with the root directory of your extracted Stanford Drone Dataset (i.e., the directory where the dataset's README and the annotation directory are located).
+2. Inside the [config/sdd_dataset_config.yaml](config/sdd_dataset_config.yaml) file, fill the `path` entry with the root directory of your extracted Stanford Drone Dataset (i.e., the directory where the dataset's README and the annotation directory are located).
 
 ### Environment Variables
 

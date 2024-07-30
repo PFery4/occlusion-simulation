@@ -5,7 +5,7 @@ import pandas as pd
 # the directory to the root of the repository
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
 # path of the config file that points to the root of the unprocessed SDD directory.
-SDD_CONFIG = os.path.abspath(os.path.join(REPO_ROOT, 'config', 'SDD_dataset_config.yaml'))
+SDD_CONFIG = os.path.abspath(os.path.join(REPO_ROOT, 'config', 'sdd_dataset_config.yaml'))
 
 # homography data: for each scene, we measure a distance in pixel space and real physical space.
 # We make use of landmarks present in the scene to obtain corresponding measurements in image and real space.
