@@ -25,15 +25,12 @@ rng.shuffle(SCENE_SPLIT)
 def get_config(
         filepath: str
 ) -> dict:
-    # TODO: change input to os.path object instead of str.
     """
-    reads the config file '{config_filename}.yaml' that is inside the 'config' directory.
+    reads the provided '.yaml' config file.
     :return: the contents of the config file, as a dict
     """
     # define the config file path
-    # confpath = os.path.join(REPO_ROOT, "config", f"{config_filename}.yaml")
     assert os.path.exists(filepath), f"ERROR | PATH DOES NOT EXIST:\n{filepath}"
-    # print(f"Loading config from:\n{confpath}\n")
 
     # read config file
     with open(filepath, "r") as stream:
