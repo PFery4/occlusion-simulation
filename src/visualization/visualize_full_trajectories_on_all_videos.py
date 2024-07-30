@@ -60,8 +60,11 @@ def visualize_full_trajectories_on_all_videos(preprocessing_cfg: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--preprocessing-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the preprocessing.')
+    parser.add_argument(
+        '--preprocessing-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_preprocessing_config.yaml'),
+        help='name of the .yaml config file to use for the parameters of the preprocessing.'
+    )
     args = parser.parse_args()
 
     visualize_full_trajectories_on_all_videos(preprocessing_cfg=args.preprocessing_cfg)

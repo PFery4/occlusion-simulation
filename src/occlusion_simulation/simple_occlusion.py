@@ -1,3 +1,4 @@
+import os.path
 import argparse
 import numpy as np
 import shapely.geometry as sp
@@ -455,10 +456,16 @@ def time_polygon_generation(instance_dict: dict, n_iterations: int = 1000000):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the base SDD dataset.')
-    parser.add_argument('--simulator-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of occlusion simulator.')
+    parser.add_argument(
+        '--dataset-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for the parameters of the base SDD dataset.'
+    )
+    parser.add_argument(
+        '--simulator-cfg',
+        type=os.path.abspath, required=True,
+        help='name of the .yaml config file to use for the parameters of occlusion simulator.'
+    )
     args = parser.parse_args()
 
     runsim_on_entire_dataset(

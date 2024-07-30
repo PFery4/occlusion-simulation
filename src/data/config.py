@@ -5,7 +5,8 @@ from random import Random
 
 # the directory to the root of the repository
 REPO_ROOT = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", ".."))
-SDD_CONFIG = 'SDD_dataset_config'   # name of the config file that points to the root of the unprocessed SDD directory.
+# path of the config file that points to the root of the unprocessed SDD directory.
+SDD_CONFIG = os.path.abspath(os.path.join(REPO_ROOT, 'config', 'SDD_dataset_config.yaml'))
 
 # homography data: for each scene, we measure a distance in pixel space and real physical space.
 # We make use of landmarks present in the scene to obtain corresponding measurements in image and real space.
@@ -21,19 +22,21 @@ SCENE_SPLIT = ["train"] * 42 + ["val"] * 9 + ["test"] * 9
 rng.shuffle(SCENE_SPLIT)
 
 
-def get_config(config_filename) -> dict:
+def get_config(
+        filepath: str
+) -> dict:
     # TODO: change input to os.path object instead of str.
     """
     reads the config file '{config_filename}.yaml' that is inside the 'config' directory.
     :return: the contents of the config file, as a dict
     """
     # define the config file path
-    confpath = os.path.join(REPO_ROOT, "config", f"{config_filename}.yaml")
-    assert os.path.exists(confpath), f"ERROR | PATH DOES NOT EXIST:\n{confpath}"
+    # confpath = os.path.join(REPO_ROOT, "config", f"{config_filename}.yaml")
+    assert os.path.exists(filepath), f"ERROR | PATH DOES NOT EXIST:\n{filepath}"
     # print(f"Loading config from:\n{confpath}\n")
 
     # read config file
-    with open(confpath, "r") as stream:
+    with open(filepath, "r") as stream:
         try:
             config = yaml.safe_load(stream)
             # print(config)

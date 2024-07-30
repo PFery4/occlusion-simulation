@@ -105,10 +105,16 @@ def save_simulation_cases(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the instantiation of the Dataset.')
-    parser.add_argument('--simulator-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the occlusion simulator.')
+    parser.add_argument(
+        '--dataset-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for the instantiation of the Dataset.'
+    )
+    parser.add_argument(
+        '--simulator-cfg',
+        type=os.path.abspath, required=True,
+        help='name of the .yaml config file to use for the parameters of the occlusion simulator.'
+    )
     args = parser.parse_args()
 
     save_simulation_cases(

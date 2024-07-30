@@ -1,5 +1,6 @@
 import argparse
 import matplotlib.pyplot as plt
+import os.path
 
 import src.data.config as conf
 from src.data.sdd_dataloader import StanfordDroneDataset
@@ -48,10 +49,16 @@ def show_simulation(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the instantiation of the Dataset.')
-    parser.add_argument('--simulator-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the occlusion simulator.')
+    parser.add_argument(
+        '--dataset-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for the instantiation of the Dataset.'
+    )
+    parser.add_argument(
+        '--simulator-cfg',
+        type=os.path.abspath, required=True,
+        help='name of the .yaml config file to use for the parameters of the occlusion simulator.'
+    )
     parser.add_argument('--instance-idx', type=int, default=7592,
                         help='instance index to use as the example to execute the simulator on.')
     args = parser.parse_args()

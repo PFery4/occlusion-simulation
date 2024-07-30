@@ -12,10 +12,15 @@ from src.data import sdd_data_processing
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--preprocessing-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the preprocessing.')
-    parser.add_argument('--dir-name', type=str, default=None, required=False,
-                        help='name of the directory to save processed dataset.')
+    parser.add_argument(
+        '--preprocessing-cfg',
+        type=os.path.abspath, default=os.path.join(config.REPO_ROOT, 'config', 'dataset_preprocessing_config.yaml'),
+        help='name of the .yaml config file to use for the parameters of the preprocessing.'
+    )
+    parser.add_argument(
+        '--dir-name', type=str, default=None, required=False,
+        help='name of the directory to save processed dataset.'
+    )
     args = parser.parse_args()
 
     if args.dir_name is None:

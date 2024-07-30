@@ -146,12 +146,19 @@ def get_greatest_distance_m(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the base SDD dataset.')
-    parser.add_argument('--show', action='store_true', default=False,
-                        help='whether to display this script\'s output on the screen.')
-    parser.add_argument('--save', action='store_true', default=False,
-                        help='whether to save this script\'s output as a png file.')
+    parser.add_argument(
+        '--dataset-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for the parameters of the base SDD dataset.'
+    )
+    parser.add_argument(
+        '--show', action='store_true', default=False,
+        help='whether to display this script\'s output on the screen.'
+    )
+    parser.add_argument(
+        '--save', action='store_true', default=False,
+        help='whether to save this script\'s output as a png file.'
+    )
     args = parser.parse_args()
 
     assert args.save or args.show, "Please select at least one option from --save / --show."

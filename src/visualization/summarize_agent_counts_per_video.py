@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import os.path
 import pandas as pd
 
 import src.data.config as conf
@@ -40,8 +41,11 @@ def summarize_agent_counts_per_video(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset-cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for the parameters of the base SDD dataset.')
+    parser.add_argument(
+        '--dataset-cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for the parameters of the base SDD dataset.'
+    )
     args = parser.parse_args()
 
     summarize_agent_counts_per_video(args.dataset_cfg)

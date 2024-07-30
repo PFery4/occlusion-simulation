@@ -1,6 +1,7 @@
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
+import os.path
 import time
 
 import src.data.config as conf
@@ -55,8 +56,11 @@ def visualize_dataset_instances(
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, required=True,
-                        help='name of the .yaml config file to use for instantiating the dataset.')
+    parser.add_argument(
+        '--cfg',
+        type=os.path.abspath, default=os.path.join(conf.REPO_ROOT, 'config', 'dataset_config.yaml'),
+        help='name of the .yaml config file to use for instantiating the dataset.'
+    )
     parser.add_argument('--dataset-class', type=str, default='base',
                         help='[\'base\' | \'sim\'], whether to instantiate a dataset with/without occlusions.')
     parser.add_argument('--split', type=str, default=None,
