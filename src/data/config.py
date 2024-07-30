@@ -24,7 +24,7 @@ COORD_CONV = pd.read_csv(
 # rng.shuffle(SCENE_SPLIT)
 # print(SCENE_SPLIT)
 SCENE_SPLIT = pd.read_csv(
-    os.path.join(REPO_ROOT, 'config', 'SDD_splits.txt'),
+    os.path.join(REPO_ROOT, 'config', 'sdd_splits.txt'),
     sep=';', index_col=('scene', 'video')
 )
 
