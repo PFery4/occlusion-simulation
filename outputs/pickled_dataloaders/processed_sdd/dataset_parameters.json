@@ -1,0 +1,13 @@
+{
+    "orig_fps": 30,
+    "fps": 2.5,
+    "T_obs": 8,
+    "T_pred": 12,
+    "min_n": 1,
+    "agent_classes": [
+        "Pedestrian",
+        "Biker",
+        "Skater"
+    ],
+    "other_agents": "OUT"
+}

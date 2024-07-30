@@ -1,0 +1,16 @@
+{
+    "sim_id": "v3_161803399",
+    "rng_seed": 161803399,
+    "simulations_per_instance": 1,
+    "n_target_agents": 1,
+    "min_obs": 3,
+    "min_reobs": 0,
+    "min_occl": 5,
+    "min_travl_dist": 50,
+    "d_border": 4.5,
+    "d_min_occl_ag": 60,
+    "d_min_occl_ego": 30,
+    "k_ag_ego_distance": 1.1,
+    "target_angle": 45,
+    "r_agents": 10
+}
