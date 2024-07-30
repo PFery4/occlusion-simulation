@@ -7,7 +7,7 @@
 
 # ignore outputs directory
 outputs/*
-!/outputs/pickled_dataloaders/processed_sdd/*
+!outputs/pickled_dataloaders/processed_sdd/*
 
 # ignore all eventual log files
 **/*.log
