@@ -91,11 +91,11 @@ class StanfordDroneDataset(Dataset):
         return instance_dict
 
     def split_subset(self):
-        scene_video_indices_lookuptable = self.lookuptable.index.droplevel(2)
-        scene_video_indices_frames = self.frames.index
-        split_indices = scene_video_indices_lookuptable.unique()[
-            np.array(conf.SCENE_SPLIT) == self.split
-            ]
+        scene_video_indices_lookuptable = self.lookuptable.index.copy().droplevel(2)
+        scene_video_indices_frames = self.frames.index.copy()
+
+        split_indices = conf.SCENE_SPLIT.loc[(conf.SCENE_SPLIT == self.split).values].index
+
         self.lookuptable = self.lookuptable[scene_video_indices_lookuptable.isin(split_indices)]
         self.frames = self.frames[scene_video_indices_frames.isin(split_indices)]
         assert (self.lookuptable.index.droplevel(2).unique() == self.frames.index.unique()).all()
